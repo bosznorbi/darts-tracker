@@ -55,7 +55,6 @@
     let defaultTripleRingOuter  = 140;
     let defaultDoubleRingInner  = 240;
     let defaultDoubleRingOuter  = 260;
-    let defaultOuterEdge        = 280;
 
     // Official dartboard diameter in mm.
     const realBoardDiameterMM = 451;
@@ -66,8 +65,7 @@
       tripleIn:   99,
       tripleOut:  107,
       doubleIn:   162,
-      doubleOut:  170,
-      outerEdge:  225.5
+      doubleOut:  170
     };
 
     const sectorAngle = Math.PI / 10;  // 18° per sector.
@@ -85,7 +83,6 @@
       tripleOut: defaultTripleRingOuter,
       doubleIn: defaultDoubleRingInner,
       doubleOut: defaultDoubleRingOuter,
-      outerEdge: defaultOuterEdge,
       rotation: -Math.PI / 20,
       photoDataUrl: null
     };
@@ -107,7 +104,7 @@
      *        CALIBRATION STATE
      *****************************************/
     let isCalibrating = false;
-    let calibrationStep = 0;  // For "full": 1..9, for "quick": 1..2.
+    let calibrationStep = 0;  // For "full": 1..8, for "quick": 1..2.
     let calibMousePos = null;   // Live mouse position during calibration.
 
     /*****************************************
@@ -157,10 +154,9 @@
     /*****************************************
      *         UTILITY FUNCTIONS
      *****************************************/
-    // Convert pixels to centimeters based on the calibrated outer edge.
+    // Convert pixels to centimeters based on the calibrated double ring.
     function pxToCM(pxDist) {
-      let usedOuterEdge = calibration.outerEdge;
-      let boardDiameterPX = usedOuterEdge * 2;
+      let boardDiameterPX = calibration.doubleOut * 2;
       let mmPerPx = realBoardDiameterMM / boardDiameterPX;
       return (pxDist * mmPerPx) / 10;
     }
@@ -172,7 +168,7 @@
       const dx = x - calibration.center.x;
       const dy = y - calibration.center.y;
       const r = Math.hypot(dx, dy);
-      if (r > calibration.outerEdge) return 0;
+      if (r > calibration.doubleOut) return 0;
       if (r <= calibration.bullseye) return 50;
       if (r <= calibration.outerBull) return 25;
       let multiplier = 1;
@@ -203,8 +199,7 @@
         calibration.tripleIn,
         calibration.tripleOut,
         calibration.doubleIn,
-        calibration.doubleOut,
-        calibration.outerEdge
+        calibration.doubleOut
       ];
       rings.forEach(r => {
         ctx.beginPath();
@@ -215,8 +210,8 @@
         let angle = calibration.rotation - Math.PI/2 + i * sectorAngle;
         let x1 = calibration.center.x + calibration.bullseye * Math.cos(angle);
         let y1 = calibration.center.y + calibration.bullseye * Math.sin(angle);
-        let x2 = calibration.center.x + calibration.outerEdge * Math.cos(angle);
-        let y2 = calibration.center.y + calibration.outerEdge * Math.sin(angle);
+        let x2 = calibration.center.x + calibration.doubleOut * Math.cos(angle);
+        let y2 = calibration.center.y + calibration.doubleOut * Math.sin(angle);
         ctx.beginPath();
         ctx.moveTo(x1, y1);
         ctx.lineTo(x2, y2);
@@ -227,9 +222,9 @@
       // In calibration mode, re-add custom cursor and preview.
       if (isCalibrating && calibMousePos) {
         ctx.save();
-        // If in ring calibration steps (for full: steps 2–8, or for quick step 2), draw dashed preview circle.
+        // If in ring calibration steps (for full: steps 2–7, or for quick step 2), draw dashed preview circle.
         if (
-          (calibration.mode==="full" && calibrationStep >= 2 && calibrationStep <= 8) ||
+          (calibration.mode==="full" && calibrationStep >= 2 && calibrationStep <= 7) ||
           (calibration.mode==="quick" && calibrationStep===2)
         ) {
           ctx.setLineDash([5, 5]);
@@ -240,9 +235,9 @@
           ctx.lineWidth = 2;
           ctx.stroke();
         }
-        // For final rotation step (full step 9), draw dashed line.
+        // For final rotation step (full step 8), draw dashed line.
         if (
-          (calibration.mode==="full" && calibrationStep===9) ||
+          (calibration.mode==="full" && calibrationStep===8) ||
           (calibration.mode==="quick" && calibrationStep===2)
         ) {
           ctx.setLineDash([5, 5]);
@@ -301,14 +296,11 @@
       } else if (r <= calibration.doubleOut) {
         ringMin = calibration.doubleIn;
         ringMax = calibration.doubleOut;
-      } else if (r <= calibration.outerEdge) {
-        ringMin = calibration.doubleOut;
-        ringMax = calibration.outerEdge;
       } else { return; }
       let angle = Math.atan2(dy, dx);
       let normalized = (angle + Math.PI/2 - calibration.rotation + 2*Math.PI) % (2*Math.PI);
-      let sectorIndex = Math.floor(normalized / sectorAngle);
-      let sectorStart = sectorIndex * sectorAngle;
+      let sectorIdx = Math.floor(normalized / sectorAngle);
+      let sectorStart = sectorIdx * sectorAngle;
       let sectorEnd = sectorStart + sectorAngle;
       let startAngle = sectorStart - Math.PI/2 + calibration.rotation;
       let endAngle = sectorEnd - Math.PI/2 + calibration.rotation;
@@ -388,8 +380,7 @@
           case 5: msg = "Step 5: Click to set outer treble radius."; break;
           case 6: msg = "Step 6: Click to set inner double radius."; break;
           case 7: msg = "Step 7: Click to set outer double radius."; break;
-          case 8: msg = "Step 8: Click to set board's outer edge."; break;
-          case 9: msg = "Step 9: Click the crossing of 20 & 1 at the top double ring."; break;
+          case 8: msg = "Step 8: Click the crossing of 20 & 1 at the top double ring."; break;
         }
       } else if (calibration.mode === "quick") {
         if (calibrationStep === 1) msg = "Quick Step 1: Click board center.";
@@ -411,8 +402,7 @@
         case 5: calibration.tripleOut = distFromCenter(pt); break;
         case 6: calibration.doubleIn = distFromCenter(pt); break;
         case 7: calibration.doubleOut = distFromCenter(pt); break;
-        case 8: calibration.outerEdge = distFromCenter(pt); break;
-        case 9:
+        case 8:
           let dx = pt.x - calibration.center.x;
           let dy = pt.y - calibration.center.y;
           let angle = Math.atan2(dy, dx);
@@ -421,7 +411,7 @@
           alert("Full calibration complete!");
           break;
       }
-      if (calibrationStep < 9) calibrationStep++;
+      if (calibrationStep < 8) calibrationStep++;
       updateInstructions();
       drawAll();
       saveShots();
@@ -440,7 +430,6 @@
         calibration.tripleOut = OFFICIAL_MM.tripleOut * pxPerMm;
         calibration.doubleIn = OFFICIAL_MM.doubleIn * pxPerMm;
         calibration.doubleOut = OFFICIAL_MM.doubleOut * pxPerMm;
-        calibration.outerEdge = OFFICIAL_MM.outerEdge * pxPerMm;
         let angle = Math.atan2(dy, dx);
         calibration.rotation = angle + Math.PI / 2;
         isCalibrating = false; calibrationStep = 0; calibMousePos = null;
@@ -518,8 +507,6 @@
         regionCenter = (calibration.tripleOut + calibration.doubleIn) / 2;
       } else if (r <= calibration.doubleOut) {
         regionCenter = (calibration.doubleIn + calibration.doubleOut) / 2;
-      } else if (r <= calibration.outerEdge) {
-        regionCenter = (calibration.doubleOut + calibration.outerEdge) / 2;
       } else { return null; }
       let theta = Math.atan2(dy, dx);
       let normalized = (theta + Math.PI/2 - calibration.rotation + 2*Math.PI) % (2*Math.PI);
@@ -611,7 +598,7 @@
       isCalibrating = true;
       calibrationStep = 1;
       calibMousePos = null;
-      alert("Full calibration started (9 steps). Follow on-screen instructions.");
+      alert("Full calibration started (8 steps). Follow on-screen instructions.");
       updateInstructions();
       drawAll();
     });
@@ -625,29 +612,6 @@
       updateInstructions();
       drawAll();
     });
-
-    function updateInstructions() {
-      const instr = document.getElementById("calibrationInstructions");
-      if (!isCalibrating) { instr.textContent = ""; return; }
-      let msg = "";
-      if (calibration.mode === "full") {
-        switch (calibrationStep) {
-          case 1: msg = "Full Step 1: Click board center."; break;
-          case 2: msg = "Step 2: Click to set bullseye radius."; break;
-          case 3: msg = "Step 3: Click to set outer bull radius."; break;
-          case 4: msg = "Step 4: Click to set inner treble radius."; break;
-          case 5: msg = "Step 5: Click to set outer treble radius."; break;
-          case 6: msg = "Step 6: Click to set inner double radius."; break;
-          case 7: msg = "Step 7: Click to set outer double radius."; break;
-          case 8: msg = "Step 8: Click to set board's outer edge (0 region)."; break;
-          case 9: msg = "Step 9: Click the crossing of 20 & 1 at the top double ring."; break;
-        }
-      } else if (calibration.mode === "quick") {
-        if (calibrationStep === 1) msg = "Quick Step 1: Click board center.";
-        else if (calibrationStep === 2) msg = "Step 2: Click the crossing of 20 & 1 at the top double ring.";
-      }
-      instr.textContent = msg;
-    }
 
     /*****************************************
      *              INIT
