@@ -517,13 +517,15 @@
       shots.slice().reverse().forEach((shot, reversedIdx) => {
         const idx = shots.length - 1 - reversedIdx; // Get original index
         
-        // Skip rendering shots older than last 15
-        if (reversedIdx >= 15) return;
-        
         // Calculate which darts should be fully visible
         // This is based on the remainder when dividing total shots by 3
         let currentTurnDartCount = shots.length % 3;
         if (currentTurnDartCount === 0) currentTurnDartCount = 3; // If it's a complete turn
+        
+        // Check if this dart should be displayed
+        // We keep the current turn (1-3 darts) plus exactly 12 more darts
+        const maxTransparentDarts = 12;
+        if (reversedIdx >= currentTurnDartCount + maxTransparentDarts) return;
         
         // Only the last 1-3 darts of the current turn should be fully opaque
         const isCurrentTurnDart = reversedIdx < currentTurnDartCount;
@@ -874,15 +876,16 @@
       // Display all shots with recent ones highlighted
       shots.forEach((shot, idx) => {
         const reversedIdx = shots.length - 1 - idx;
-        let dx = shot.hit.x - shot.aim.x;
-        let dy = shot.hit.y - shot.aim.y;
-        let distCm = Math.hypot(pxToCM(dx), pxToCM(dy));
-        let score = getDartScore(shot.hit.x, shot.hit.y);
         
         // Calculate which darts should be fully visible
         // This is based on the remainder when dividing total shots by 3
         let currentTurnDartCount = shots.length % 3;
         if (currentTurnDartCount === 0) currentTurnDartCount = 3; // If it's a complete turn
+        
+        let dx = shot.hit.x - shot.aim.x;
+        let dy = shot.hit.y - shot.aim.y;
+        let distCm = Math.hypot(pxToCM(dx), pxToCM(dy));
+        let score = getDartScore(shot.hit.x, shot.hit.y);
         
         // Only the last 1-3 darts of the current turn should be highlighted
         const isCurrentTurnDart = reversedIdx < currentTurnDartCount;
@@ -892,8 +895,8 @@
         if (isCurrentTurnDart) {
           // Current turn darts - bold
           shotStyle = "font-weight: bold;";
-        } else if (reversedIdx < 15) {
-          // Previous turns (up to 15 darts) - dimmed
+        } else if (reversedIdx < currentTurnDartCount + 12) {
+          // Previous turns (up to 12 darts beyond current turn) - dimmed
           shotStyle = "opacity: 0.6;";
         } else {
           // Older shots - very dimmed
