@@ -326,6 +326,7 @@
         undoStack = []; // Clear undo stack
         shotsLogDiv.innerHTML = "";
         currentAim = null;
+        resetFadingDarts(); // Reset animations when clearing shots
         saveShots();
         drawAll();
         showNotification("Shots cleared successfully");
@@ -513,7 +514,7 @@
     function drawShots() {
       highlightAimedField(currentAim);
       
-      // Only display recent shots based on recency
+      // First, draw the standard darts
       shots.slice().reverse().forEach((shot, reversedIdx) => {
         const idx = shots.length - 1 - reversedIdx; // Get original index
         
@@ -527,49 +528,27 @@
         const maxTransparentDarts = 12;
         if (reversedIdx >= currentTurnDartCount + maxTransparentDarts) return;
         
-        // Only the last 1-3 darts of the current turn should be fully opaque
-        const isCurrentTurnDart = reversedIdx < currentTurnDartCount;
-        const opacity = isCurrentTurnDart ? 1.0 : 0.35;
-        
-        // Draw dashed line between aim and hit.
-        if (shot.aim && shot.hit) {
-          ctx.save();
-          ctx.setLineDash([4,4]);
-          ctx.beginPath();
-          ctx.moveTo(shot.aim.x, shot.aim.y);
-          ctx.lineTo(shot.hit.x, shot.hit.y);
-          ctx.strokeStyle = `rgba(128, 128, 128, ${opacity})`;
-          ctx.lineWidth = 1;
-          ctx.stroke();
-          ctx.restore();
+        // Check if this dart is currently being animated
+        if (fadingDarts.some(fd => fd.dartIndex === idx)) {
+          // Skip - will be drawn in the fading darts section
+          return; 
         }
         
-        // Draw hit marker as an X with opacity:
-        if (shot.hit) {
-          const hx = shot.hit.x, hy = shot.hit.y;
-          // Draw a thin black outline.
-          ctx.save();
-          ctx.strokeStyle = `rgba(0, 0, 0, ${opacity})`;
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-            ctx.moveTo(hx - 4, hy - 4);
-            ctx.lineTo(hx + 4, hy + 4);
-            ctx.moveTo(hx + 4, hy - 4);
-            ctx.lineTo(hx - 4, hy + 4);
-          ctx.stroke();
-          ctx.restore();
-          
-          // Draw the white X on top.
-          ctx.save();
-          ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
-          ctx.lineWidth = 1.5;
-          ctx.beginPath();
-          ctx.moveTo(hx - 4, hy - 4);
-          ctx.lineTo(hx + 4, hy + 4);
-          ctx.moveTo(hx + 4, hy - 4);
-          ctx.lineTo(hx - 4, hy + 4);
-          ctx.stroke();
-          ctx.restore();
+        // Only the last 1-3 darts of the current turn should be fully opaque
+        const isCurrentTurnDart = reversedIdx < currentTurnDartCount;
+        const opacity = isCurrentTurnDart ? FULL_OPACITY : REDUCED_OPACITY;
+        
+        // Use our helper function to draw the dart
+        drawDartAtOpacity(shot, opacity);
+      });
+      
+      // Then, draw any fading darts
+      fadingDarts.forEach(fadingDart => {
+        if (fadingDart.dartIndex >= 0 && fadingDart.dartIndex < shots.length) {
+          // Get the shot data from the main array
+          const shot = shots[fadingDart.dartIndex];
+          // Draw with the current animation opacity
+          drawDartAtOpacity(shot, fadingDart.opacity);
         }
       });
     }
@@ -679,14 +658,20 @@
           return;
         }
         let hitPt = { x: clickPt.x, y: clickPt.y };
+        
+        // Store previous shot count to check for animations
+        const prevShotCount = shots.length;
+        
+        // Add the new shot
         shots.push({ aim: currentAim, hit: hitPt });
         undoStack = []; // Clear the undo stack when adding a new shot after undoing
         saveShots();
-        let dx = hitPt.x - currentAim.x;
-        let dy = hitPt.y - currentAim.y;
-        let distCm = Math.hypot(pxToCM(dx), pxToCM(dy));
-        let score = getDartScore(hitPt.x, hitPt.y);
+        
+        // Update UI and check for animations
         updateShotLog();
+        checkForFadingDarts(); // Check if any darts need to be animated
+        
+        // Draw everything
         drawAll();
         updateUndoRedoState();
       }
@@ -840,6 +825,18 @@
     });
 
     /*****************************************
+     *            ANIMATION SYSTEM
+     *****************************************/
+    // Animation state variables
+    let fadingDarts = []; // Array to track darts that are currently being animated
+    let lastShotCount = 0; // Remember previous shot count for detecting changes
+    
+    // Animation constants
+    const ANIMATION_DURATION = 500; // Duration in milliseconds
+    const FULL_OPACITY = 1.0;
+    const REDUCED_OPACITY = 0.35;
+
+    /*****************************************
      *            UNDO-REDO SYSTEM
      *****************************************/
     function updateUndoRedoState() {
@@ -879,8 +876,7 @@
         
         // Calculate which darts should be fully visible
         // This is based on the remainder when dividing total shots by 3
-        let currentTurnDartCount = shots.length % 3;
-        if (currentTurnDartCount === 0) currentTurnDartCount = 3; // If it's a complete turn
+        let currentTurnDartCount = shots.length % 3 || 3; // 1-3 darts in current turn
         
         let dx = shot.hit.x - shot.aim.x;
         let dy = shot.hit.y - shot.aim.y;
@@ -907,11 +903,18 @@
       });
     }
 
+    // Reset any ongoing animations (for undo/redo operations)
+    function resetFadingDarts() {
+      fadingDarts = [];
+      lastShotCount = shots.length;
+    }
+
     document.getElementById("undoBtn").addEventListener("click", function() {
       if (shots.length === 0) return;
       undoStack.push(shots.pop());
       updateShotLog();
       saveShots();
+      resetFadingDarts(); // Reset animations when undoing
       drawAll();
       updateUndoRedoState();
       showNotification("Last shot undone");
@@ -922,6 +925,7 @@
       shots.push(undoStack.pop());
       updateShotLog();
       saveShots();
+      resetFadingDarts(); // Reset animations when redoing
       drawAll();
       updateUndoRedoState();
       showNotification("Shot redone");
@@ -967,10 +971,159 @@
     function init() {
       loadShots();
       boardImage.onload = drawAll;
+      
+      // Check for animations on initialization
+      if (shots.length > 0) {
+        checkForFadingDarts();
+      }
+      
       drawAll();
       updateUndoRedoState();
     }
     init();
+
+    // Helper function to draw a dart with specific opacity
+    function drawDartAtOpacity(shot, opacity) {
+      // Draw dashed line between aim and hit
+      if (shot.aim && shot.hit) {
+        ctx.save();
+        ctx.setLineDash([4,4]);
+        ctx.beginPath();
+        ctx.moveTo(shot.aim.x, shot.aim.y);
+        ctx.lineTo(shot.hit.x, shot.hit.y);
+        ctx.strokeStyle = `rgba(128, 128, 128, ${opacity})`;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+      
+      // Draw hit marker as an X with opacity
+      if (shot.hit) {
+        const hx = shot.hit.x, hy = shot.hit.y;
+        // Draw a thin black outline
+        ctx.save();
+        ctx.strokeStyle = `rgba(0, 0, 0, ${opacity})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(hx - 4, hy - 4);
+        ctx.lineTo(hx + 4, hy + 4);
+        ctx.moveTo(hx + 4, hy - 4);
+        ctx.lineTo(hx - 4, hy + 4);
+        ctx.stroke();
+        ctx.restore();
+        
+        // Draw the white X on top
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 255, 255, ${opacity})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(hx - 4, hy - 4);
+        ctx.lineTo(hx + 4, hy + 4);
+        ctx.moveTo(hx + 4, hy - 4);
+        ctx.lineTo(hx - 4, hy + 4);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Function to update the animation state of fading darts
+    function updateFadingDarts() {
+      const now = performance.now();
+      let needsRedraw = false;
+      
+      // Update each fading dart's opacity based on animation progress
+      fadingDarts = fadingDarts.filter(fadingDart => {
+        const elapsed = now - fadingDart.startTime;
+        
+        // Remove completed animations
+        if (elapsed >= ANIMATION_DURATION) {
+          return false;
+        }
+        
+        // Calculate progress (0 to 1) with a smooth easing function
+        const progress = elapsed / ANIMATION_DURATION;
+        const easedProgress = 0.5 - Math.cos(progress * Math.PI) / 2; // Smooth easing
+        
+        // Update opacity based on animation type
+        if (fadingDart.type === 'fadeOut') {
+          // Fading out completely (from reduced opacity to 0)
+          fadingDart.opacity = fadingDart.startOpacity * (1 - easedProgress);
+        } else if (fadingDart.type === 'fadeDown') {
+          // Fading from full opacity to reduced opacity
+          fadingDart.opacity = fadingDart.startOpacity - 
+            (fadingDart.startOpacity - REDUCED_OPACITY) * easedProgress;
+        }
+        
+        needsRedraw = true;
+        return true;
+      });
+      
+      // If any darts are still animating, request another frame and redraw
+      if (needsRedraw) {
+        drawAll();
+        requestAnimationFrame(updateFadingDarts);
+      }
+      
+      // Update shot count for next comparison
+      lastShotCount = shots.length;
+    }
+
+    // Function to detect darts that need animations
+    function checkForFadingDarts() {
+      // Get current turn information
+      const currentTurnDartCount = shots.length % 3 || 3; // 1-3 darts in current turn
+      
+      // Clear existing animations for better control
+      fadingDarts = [];
+      
+      // First, check if we just completed a turn (added a 3rd, 6th, 9th dart etc.)
+      const justCompletedTurn = shots.length % 3 === 0 && shots.length > 0;
+      
+      // Or if we just started a new turn (added a 1st, 4th, 7th dart etc.)
+      const justStartedTurn = shots.length % 3 === 1 && shots.length > 3;
+      
+      // The display limit (current turn + 12 more darts)
+      const displayLimit = currentTurnDartCount + 12;
+      
+      // For all shots, determine which need animations
+      for (let i = 0; i < shots.length; i++) {
+        const reversedIdx = shots.length - 1 - i;
+        
+        // 1. Handle the transition from full to reduced opacity
+        // When we complete a turn, the current turn's darts should fade down
+        if (justCompletedTurn && reversedIdx >= 0 && reversedIdx < 3) {
+          fadingDarts.push({
+            dartIndex: i,
+            type: 'fadeDown',
+            startOpacity: FULL_OPACITY,
+            opacity: FULL_OPACITY,
+            startTime: performance.now()
+          });
+        }
+        
+        // 2. Handle darts that need to fade out completely
+        // When we start a new turn and push older darts beyond the display limit
+        if (justStartedTurn && 
+            reversedIdx >= displayLimit && 
+            reversedIdx < displayLimit + 3) {
+          fadingDarts.push({
+            dartIndex: i,
+            type: 'fadeOut',
+            startOpacity: REDUCED_OPACITY,
+            opacity: REDUCED_OPACITY,
+            startTime: performance.now()
+          });
+        }
+      }
+      
+      // If we have animations to process, start the animation loop
+      if (fadingDarts.length > 0) {
+        requestAnimationFrame(updateFadingDarts);
+      }
+      
+      // Update shot count for next comparison
+      lastShotCount = shots.length;
+    }
   </script>
 </body>
 </html>
