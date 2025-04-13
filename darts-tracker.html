@@ -113,7 +113,7 @@
     /* Custom notification */
     #notification {
       position: absolute;
-      bottom: 20px;
+      bottom: 50px;
       left: 50%;
       transform: translateX(-50%);
       background: rgba(0, 0, 0, 0.7);
@@ -160,19 +160,19 @@
       font-weight: bold;
       transition: background 0.2s;
     }
+    #confirmOk {
+      background: #444444;
+      color: white;
+    }
     #confirmCancel {
       background: #f0f0f0;
       color: #333;
     }
-    #confirmOk {
-      background: #007bff;
-      color: white;
+    #confirmOk:hover {
+      background: #333333;
     }
     #confirmCancel:hover {
       background: #e0e0e0;
-    }
-    #confirmOk:hover {
-      background: #0069d9;
     }
   </style>
 </head>
@@ -204,6 +204,14 @@
       <i class="fas fa-bullseye"></i>
       <span class="icon-tooltip">Full Calibration</span>
     </button>
+    <div id="notification"></div>
+    <div id="confirmDialog">
+      <div id="confirmMessage"></div>
+      <div class="dialog-buttons">
+        <button id="confirmOk" class="dialog-button">OK</button>
+        <button id="confirmCancel" class="dialog-button">Cancel</button>
+      </div>
+    </div>
   </div>
   <div id="calibrationInstructions"></div>
   <div id="shotsLog"></div>
@@ -211,15 +219,6 @@
   <!-- Hidden file inputs for .drts file and board photo -->
   <input type="file" id="fileInput" accept=".drts" style="display:none;" />
   <input type="file" id="photoInput" accept="image/*" style="display:none;" />
-
-  <div id="notification"></div>
-  <div id="confirmDialog">
-    <div id="confirmMessage"></div>
-    <div class="dialog-buttons">
-      <button id="confirmCancel" class="dialog-button">Cancel</button>
-      <button id="confirmOk" class="dialog-button">OK</button>
-    </div>
-  </div>
 
   <script>
     /*****************************************
@@ -727,6 +726,7 @@
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      showNotification("Data exported successfully");
     });
 
     document.getElementById("importDataBtn").addEventListener("click", function() {
@@ -771,7 +771,10 @@
       reader.onload = function(evt) {
         calibration.photoDataUrl = evt.target.result;
         boardImage.src = evt.target.result;
-        boardImage.onload = drawAll;
+        boardImage.onload = function() {
+          drawAll();
+          showNotification("Board image updated successfully");
+        };
         saveShots();
       };
       reader.readAsDataURL(file);
