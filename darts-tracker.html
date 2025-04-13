@@ -603,8 +603,12 @@
      *        CALIBRATION HANDLERS
      *****************************************/
     function updateInstructions() {
+      // Clear any existing text in the instructions div
       const instr = document.getElementById("calibrationInstructions");
-      if (!isCalibrating) { instr.textContent = ""; return; }
+      instr.textContent = "";
+      
+      if (!isCalibrating) return;
+      
       let msg = "";
       if (calibration.mode === "full") {
         switch (calibrationStep) {
@@ -621,7 +625,9 @@
         if (calibrationStep === 1) msg = "Quick Step 1: Click board center.";
         else if (calibrationStep === 2) msg = "Step 2: Click the crossing of 20 & 1 at the top double ring.";
       }
-      instr.textContent = msg;
+      
+      // Show the message as a persistent notification
+      showNotification(msg, "info", 0, true);
     }
 
     function distFromCenter(pt) {
@@ -643,11 +649,17 @@
           let angle = Math.atan2(dy, dx);
           calibration.rotation = angle + Math.PI / 2;
           isCalibrating = false; calibrationStep = 0; calibMousePos = null;
+          // Use regular notification for completion
           showNotification("Full calibration complete", "success", 4000);
-          break;
+          return; // Skip showing next notification
       }
-      if (calibrationStep < 8) calibrationStep++;
-      updateInstructions();
+      
+      // Show success message and advance step
+      if (calibrationStep < 8) {
+        calibrationStep++;
+        updateInstructions();
+      }
+      
       drawAll();
       saveShots();
     }
@@ -668,10 +680,17 @@
         let angle = Math.atan2(dy, dx);
         calibration.rotation = angle + Math.PI / 2;
         isCalibrating = false; calibrationStep = 0; calibMousePos = null;
+        // Use regular notification for completion
         showNotification("Quick calibration complete", "success", 4000);
+        return; // Skip showing next notification
       }
-      if (calibrationStep < 2) calibrationStep++;
-      updateInstructions();
+      
+      // Show success message and advance step
+      if (calibrationStep < 2) {
+        calibrationStep++;
+        updateInstructions();
+      }
+      
       drawAll();
       saveShots();
     }
@@ -714,6 +733,7 @@
         // Draw everything
         drawAll();
         updateUndoRedoState();
+        showNotification("Last shot added", "success");
       }
     });
 
@@ -846,7 +866,6 @@
         isCalibrating = true;
         calibrationStep = 1;
         calibMousePos = null;
-        showNotification("Full calibration started - follow on-screen instructions", "info", 5000);
         updateInstructions();
         drawAll();
       });
@@ -858,7 +877,6 @@
         isCalibrating = true;
         calibrationStep = 1;
         calibMousePos = null;
-        showNotification("Quick calibration started - follow on-screen instructions", "info", 5000);
         updateInstructions();
         drawAll();
       });
@@ -977,10 +995,11 @@
     /**
      * Show a notification with specified type
      * @param {string} message - The message to display
-     * @param {string} type - Either 'success' or 'error'
-     * @param {number} duration - How long to display the notification (ms)
+     * @param {string} type - Either 'success', 'error', or 'info'
+     * @param {number} duration - How long to display the notification (ms), or 0 for persistent
+     * @param {boolean} persistent - If true, notification stays until clicked
      */
-    function showNotification(message, type = 'success', duration = 3000) {
+    function showNotification(message, type = 'success', duration = 3000, persistent = false) {
       const notification = document.getElementById("notification");
       const notificationMessage = document.getElementById("notification-message");
       
@@ -1003,10 +1022,41 @@
       // Show notification
       notification.style.opacity = 1;
       
-      // Automatically hide the notification after the specified duration
-      setTimeout(() => {
-        notification.style.opacity = 0;
-      }, duration);
+      // For persistent notifications, add click handler to dismiss
+      if (persistent) {
+        // Make it accessible to clicks (remove pointer-events: none)
+        notification.style.pointerEvents = 'auto';
+        notification.style.cursor = 'pointer';
+        
+        // One-time click handler to dismiss
+        notification.onclick = function() {
+          notification.style.opacity = 0;
+          notification.style.pointerEvents = 'none';
+          notification.style.cursor = 'default';
+          notification.onclick = null;
+          
+          // If we're in calibration mode, advance to the next step
+          if (isCalibrating) {
+            if (calibration.mode === "full") {
+              handleFullCalibrationClick({ x: calibration.center.x, y: calibration.center.y });
+            } else if (calibration.mode === "quick") {
+              handleQuickCalibrationClick({ x: calibration.center.x, y: calibration.center.y });
+            }
+          }
+        };
+      } else {
+        // Reset click handler and style
+        notification.style.pointerEvents = 'none';
+        notification.style.cursor = 'default';
+        notification.onclick = null;
+        
+        // Automatically hide the notification after the specified duration
+        if (duration > 0) {
+          setTimeout(() => {
+            notification.style.opacity = 0;
+          }, duration);
+        }
+      }
     }
 
     function showConfirmDialog(message, onConfirm) {
