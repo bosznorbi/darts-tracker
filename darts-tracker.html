@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Darts Tracker – Two Calibration Modes with Aiming</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; }
+    canvas { 
+      border: 1px solid #000; 
+      margin-top: 10px; 
+    }
+    button { margin: 5px; padding: 5px 10px; }
+    #calibrationInstructions { margin-top: 10px; font-weight: bold; }
+    #shotsLog {
+      margin-top: 10px;
+      width: 600px;
+      margin: 0 auto;
+      text-align: left;
+      font-size: 14px;
+      line-height: 1.4em;
+    }
+  </style>
+</head>
+<body>
+  <h1>Darts Accuracy Tracker</h1>
+  <canvas id="dartboard" width="600" height="600"></canvas>
+  <br>
+  <button id="clearData">Clear Data (Shots Only)</button>
+  <button id="exportData">Export Data</button>
+  <button id="importData">Import Data</button>
+  <button id="uploadPhoto">Upload Board Photo</button>
+  <br>
+  <button id="fullCalibration">Full Calibration</button>
+  <button id="quickCalibration">Quick Calibration</button>
+  <div id="calibrationInstructions"></div>
+  <div id="shotsLog"></div>
+
+  <!-- Hidden file inputs for .drts file and board photo -->
+  <input type="file" id="fileInput" accept=".drts" style="display:none;" />
+  <input type="file" id="photoInput" accept="image/*" style="display:none;" />
+
+  <script>
+    /*****************************************
+     *       CONSTANTS & DEFAULTS
+     *****************************************/
+    const canvas = document.getElementById("dartboard");
+    const ctx = canvas.getContext("2d");
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+
+    // Default ring radii (in pixels) for a 600×600 board.
+    let defaultBullseyeRadius   = 15;
+    let defaultOuterBullRadius  = 30;
+    let defaultTripleRingInner  = 120;
+    let defaultTripleRingOuter  = 140;
+    let defaultDoubleRingInner  = 240;
+    let defaultDoubleRingOuter  = 260;
+    let defaultOuterEdge        = 280;
+
+    // Official dartboard diameter in mm.
+    const realBoardDiameterMM = 451;
+    // For quick calibration, official ring distances (mm)
+    const OFFICIAL_MM = {
+      bullseye:   6.35,
+      outerBull:  15.9,
+      tripleIn:   99,
+      tripleOut:  107,
+      doubleIn:   162,
+      doubleOut:  170,
+      outerEdge:  225.5
+    };
+
+    const sectorAngle = Math.PI / 10;  // 18° per sector.
+    const sectorOrder = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5];
+
+    /*****************************************
+     *        CALIBRATION DATA
+     *****************************************/
+    let calibration = {
+      mode: "none", // "none", "full", or "quick"
+      center: { x: centerX, y: centerY },
+      bullseye: defaultBullseyeRadius,
+      outerBull: defaultOuterBullRadius,
+      tripleIn: defaultTripleRingInner,
+      tripleOut: defaultTripleRingOuter,
+      doubleIn: defaultDoubleRingInner,
+      doubleOut: defaultDoubleRingOuter,
+      outerEdge: defaultOuterEdge,
+      rotation: -Math.PI / 20,
+      photoDataUrl: null
+    };
+
+    /*****************************************
+     *          SHOT DATA & AIM
+     *****************************************/
+    let shots = [];  // Each shot: { aim: {x,y}, hit: {x,y} }
+    let currentAim = null;
+
+    /*****************************************
+     *       BOARD IMAGE & LOG
+     *****************************************/
+    const boardImage = new Image();
+    boardImage.src = "board.png";
+    const shotsLogDiv = document.getElementById("shotsLog");
+
+    /*****************************************
+     *        CALIBRATION STATE
+     *****************************************/
+    let isCalibrating = false;
+    let calibrationStep = 0;  // For "full": 1..9, for "quick": 1..2.
+    let calibMousePos = null;   // Live mouse position during calibration.
+
+    /*****************************************
+     *       LOAD & SAVE FUNCTIONS
+     *****************************************/
+    function loadShots() {
+      const stored = localStorage.getItem("dartDataAll");
+      if (stored) {
+        let parsed = JSON.parse(stored);
+        if (parsed.shots && Array.isArray(parsed.shots)) { shots = parsed.shots; }
+        if (parsed.calibration) { calibration = parsed.calibration; applyCalibration(); }
+      }
+    }
+    function saveShots() {
+      let dataObj = { shots, calibration };
+      localStorage.setItem("dartDataAll", JSON.stringify(dataObj));
+    }
+
+    /*****************************************
+     *            CLEAR DATA
+     *****************************************/
+    // Clear only shot data (leaving calibration intact)
+    document.getElementById("clearData").addEventListener("click", function() {
+      if (!confirm("Clear shot data only? Calibration will be retained.")) return;
+      shots = [];
+      shotsLogDiv.innerHTML = "";
+      currentAim = null;
+      saveShots();
+      drawAll();
+    });
+
+    /*****************************************
+     *           APPLY CALIBRATION
+     *****************************************/
+    function applyCalibration() {
+      if (calibration.photoDataUrl) {
+        let tmpImg = new Image();
+        tmpImg.src = calibration.photoDataUrl;
+        tmpImg.onload = function() {
+          boardImage.src = tmpImg.src;
+          drawAll();
+        };
+      }
+      drawAll();
+    }
+
+    /*****************************************
+     *         UTILITY FUNCTIONS
+     *****************************************/
+    // Convert pixels to centimeters based on the calibrated outer edge.
+    function pxToCM(pxDist) {
+      let usedOuterEdge = calibration.outerEdge;
+      let boardDiameterPX = usedOuterEdge * 2;
+      let mmPerPx = realBoardDiameterMM / boardDiameterPX;
+      return (pxDist * mmPerPx) / 10;
+    }
+
+    /*****************************************
+     *              SCORING
+     *****************************************/
+    function getDartScore(x, y) {
+      const dx = x - calibration.center.x;
+      const dy = y - calibration.center.y;
+      const r = Math.hypot(dx, dy);
+      if (r > calibration.outerEdge) return 0;
+      if (r <= calibration.bullseye) return 50;
+      if (r <= calibration.outerBull) return 25;
+      let multiplier = 1;
+      if (r >= calibration.tripleIn && r <= calibration.tripleOut) multiplier = 3;
+      else if (r >= calibration.doubleIn && r <= calibration.doubleOut) multiplier = 2;
+      let angle = Math.atan2(dy, dx);
+      let normalized = (angle + Math.PI/2 - calibration.rotation + sectorAngle + 2*Math.PI) % (2*Math.PI);
+      let sectorIndex = Math.floor(normalized / sectorAngle);
+      let baseValue = sectorOrder[sectorIndex];
+      return baseValue * multiplier;
+    }
+
+    /*****************************************
+     *          DRAWING FUNCTIONS
+     *****************************************/
+    function drawBoard() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(boardImage, 0, 0, canvas.width, canvas.height);
+      
+      // Draw grid wiring: ring boundaries & radial lines.
+      ctx.save();
+      ctx.globalAlpha = 0.8;
+      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = "gray";
+      let rings = [
+        calibration.bullseye,
+        calibration.outerBull,
+        calibration.tripleIn,
+        calibration.tripleOut,
+        calibration.doubleIn,
+        calibration.doubleOut,
+        calibration.outerEdge
+      ];
+      rings.forEach(r => {
+        ctx.beginPath();
+        ctx.arc(calibration.center.x, calibration.center.y, r, 0, 2*Math.PI);
+        ctx.stroke();
+      });
+      for (let i = 0; i < 20; i++) {
+        let angle = calibration.rotation - Math.PI/2 + i * sectorAngle;
+        let x1 = calibration.center.x + calibration.bullseye * Math.cos(angle);
+        let y1 = calibration.center.y + calibration.bullseye * Math.sin(angle);
+        let x2 = calibration.center.x + calibration.outerEdge * Math.cos(angle);
+        let y2 = calibration.center.y + calibration.outerEdge * Math.sin(angle);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // In calibration mode, re-add custom cursor and preview.
+      if (isCalibrating && calibMousePos) {
+        ctx.save();
+        // If in ring calibration steps (for full: steps 2–8, or for quick step 2), draw dashed preview circle.
+        if (
+          (calibration.mode==="full" && calibrationStep >= 2 && calibrationStep <= 8) ||
+          (calibration.mode==="quick" && calibrationStep===2)
+        ) {
+          ctx.setLineDash([5, 5]);
+          let rPrev = Math.hypot(calibMousePos.x - calibration.center.x, calibMousePos.y - calibration.center.y);
+          ctx.beginPath();
+          ctx.arc(calibration.center.x, calibration.center.y, rPrev, 0, 2*Math.PI);
+          ctx.strokeStyle = "white";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        // For final rotation step (full step 9), draw dashed line.
+        if (
+          (calibration.mode==="full" && calibrationStep===9) ||
+          (calibration.mode==="quick" && calibrationStep===2)
+        ) {
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath();
+          ctx.moveTo(calibration.center.x, calibration.center.y);
+          ctx.lineTo(calibMousePos.x, calibMousePos.y);
+          ctx.strokeStyle = "white";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+        // Draw the custom calibration cursor: a white circle with a plus (cross) inside.
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(calibMousePos.x, calibMousePos.y, 5, 0, 2*Math.PI);
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(calibMousePos.x - 3, calibMousePos.y);
+        ctx.lineTo(calibMousePos.x + 3, calibMousePos.y);
+        ctx.moveTo(calibMousePos.x, calibMousePos.y - 3);
+        ctx.lineTo(calibMousePos.x, calibMousePos.y + 3);
+        ctx.strokeStyle = "white";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Highlight the aimed field:
+    // If aiming within bull (r ≤ outerBull), fill full circle; otherwise fill the annular sector.
+    function highlightAimedField(aimPos) {
+      if (!aimPos) return;
+      const dx = aimPos.x - calibration.center.x;
+      const dy = aimPos.y - calibration.center.y;
+      const r = Math.hypot(dx, dy);
+      if (r <= calibration.outerBull) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(calibration.center.x, calibration.center.y, calibration.outerBull, 0, 2*Math.PI);
+        ctx.fillStyle = "rgba(255, 255, 0, 0.3)";
+        ctx.fill();
+        ctx.restore();
+        return;
+      }
+      let ringMin = 0, ringMax = 0;
+      if (r <= calibration.tripleIn) {
+        ringMin = calibration.outerBull;
+        ringMax = calibration.tripleIn;
+      } else if (r <= calibration.tripleOut) {
+        ringMin = calibration.tripleIn;
+        ringMax = calibration.tripleOut;
+      } else if (r <= calibration.doubleIn) {
+        ringMin = calibration.tripleOut;
+        ringMax = calibration.doubleIn;
+      } else if (r <= calibration.doubleOut) {
+        ringMin = calibration.doubleIn;
+        ringMax = calibration.doubleOut;
+      } else if (r <= calibration.outerEdge) {
+        ringMin = calibration.doubleOut;
+        ringMax = calibration.outerEdge;
+      } else { return; }
+      let angle = Math.atan2(dy, dx);
+      let normalized = (angle + Math.PI/2 - calibration.rotation + 2*Math.PI) % (2*Math.PI);
+      let sectorIndex = Math.floor(normalized / sectorAngle);
+      let sectorStart = sectorIndex * sectorAngle;
+      let sectorEnd = sectorStart + sectorAngle;
+      let startAngle = sectorStart - Math.PI/2 + calibration.rotation;
+      let endAngle = sectorEnd - Math.PI/2 + calibration.rotation;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(calibration.center.x, calibration.center.y, ringMax, startAngle, endAngle, false);
+      ctx.arc(calibration.center.x, calibration.center.y, ringMin, endAngle, startAngle, true);
+      ctx.closePath();
+      ctx.fillStyle = "rgba(255, 255, 0, 0.3)";
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawShots() {
+      highlightAimedField(currentAim);
+      shots.forEach(shot => {
+        // Draw dashed line between aim and hit.
+        if (shot.aim && shot.hit) {
+          ctx.save();
+          ctx.setLineDash([4,4]);
+          ctx.beginPath();
+          ctx.moveTo(shot.aim.x, shot.aim.y);
+          ctx.lineTo(shot.hit.x, shot.hit.y);
+          ctx.strokeStyle = "gray";
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          ctx.restore();
+        }
+        // Draw hit marker as an X:
+        if (shot.hit) {
+          const hx = shot.hit.x, hy = shot.hit.y;
+          // Draw a thin light-gray outline.
+          ctx.save();
+          ctx.strokeStyle = "black";
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+            ctx.moveTo(hx - 4, hy - 4);
+            ctx.lineTo(hx + 4, hy + 4);
+            ctx.moveTo(hx + 4, hy - 4);
+            ctx.lineTo(hx - 4, hy + 4);
+          ctx.stroke();
+          ctx.restore();
+            // Draw the white X on top.
+            ctx.save();
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(hx - 4, hy - 4);
+            ctx.lineTo(hx + 4, hy + 4);
+            ctx.moveTo(hx + 4, hy - 4);
+            ctx.lineTo(hx - 4, hy + 4);
+            ctx.stroke();
+            ctx.restore();
+        }
+      });
+    }
+
+    function drawAll() {
+      if (!boardImage.complete) return;
+      drawBoard();
+      drawShots();
+    }
+
+    /*****************************************
+     *        CALIBRATION HANDLERS
+     *****************************************/
+    function updateInstructions() {
+      const instr = document.getElementById("calibrationInstructions");
+      if (!isCalibrating) { instr.textContent = ""; return; }
+      let msg = "";
+      if (calibration.mode === "full") {
+        switch (calibrationStep) {
+          case 1: msg = "Full Step 1: Click board center."; break;
+          case 2: msg = "Step 2: Click to set bullseye radius."; break;
+          case 3: msg = "Step 3: Click to set outer bull radius."; break;
+          case 4: msg = "Step 4: Click to set inner treble radius."; break;
+          case 5: msg = "Step 5: Click to set outer treble radius."; break;
+          case 6: msg = "Step 6: Click to set inner double radius."; break;
+          case 7: msg = "Step 7: Click to set outer double radius."; break;
+          case 8: msg = "Step 8: Click to set board's outer edge."; break;
+          case 9: msg = "Step 9: Click the crossing of 20 & 1 at the top double ring."; break;
+        }
+      } else if (calibration.mode === "quick") {
+        if (calibrationStep === 1) msg = "Quick Step 1: Click board center.";
+        else if (calibrationStep === 2) msg = "Step 2: Click the crossing of 20 & 1 at the top double ring.";
+      }
+      instr.textContent = msg;
+    }
+
+    function distFromCenter(pt) {
+      return Math.hypot(pt.x - calibration.center.x, pt.y - calibration.center.y);
+    }
+
+    function handleFullCalibrationClick(pt) {
+      switch (calibrationStep) {
+        case 1: calibration.center = pt; break;
+        case 2: calibration.bullseye = distFromCenter(pt); break;
+        case 3: calibration.outerBull = distFromCenter(pt); break;
+        case 4: calibration.tripleIn = distFromCenter(pt); break;
+        case 5: calibration.tripleOut = distFromCenter(pt); break;
+        case 6: calibration.doubleIn = distFromCenter(pt); break;
+        case 7: calibration.doubleOut = distFromCenter(pt); break;
+        case 8: calibration.outerEdge = distFromCenter(pt); break;
+        case 9:
+          let dx = pt.x - calibration.center.x;
+          let dy = pt.y - calibration.center.y;
+          let angle = Math.atan2(dy, dx);
+          calibration.rotation = angle + Math.PI / 2;
+          isCalibrating = false; calibrationStep = 0; calibMousePos = null;
+          alert("Full calibration complete!");
+          break;
+      }
+      if (calibrationStep < 9) calibrationStep++;
+      updateInstructions();
+      drawAll();
+      saveShots();
+    }
+
+    function handleQuickCalibrationClick(pt) {
+      if (calibrationStep === 1) { calibration.center = pt; }
+      else if (calibrationStep === 2) {
+        let dx = pt.x - calibration.center.x;
+        let dy = pt.y - calibration.center.y;
+        let distPx = Math.hypot(dx, dy);
+        let pxPerMm = distPx / OFFICIAL_MM.doubleOut;
+        calibration.bullseye = OFFICIAL_MM.bullseye * pxPerMm;
+        calibration.outerBull = OFFICIAL_MM.outerBull * pxPerMm;
+        calibration.tripleIn = OFFICIAL_MM.tripleIn * pxPerMm;
+        calibration.tripleOut = OFFICIAL_MM.tripleOut * pxPerMm;
+        calibration.doubleIn = OFFICIAL_MM.doubleIn * pxPerMm;
+        calibration.doubleOut = OFFICIAL_MM.doubleOut * pxPerMm;
+        calibration.outerEdge = OFFICIAL_MM.outerEdge * pxPerMm;
+        let angle = Math.atan2(dy, dx);
+        calibration.rotation = angle + Math.PI / 2;
+        isCalibrating = false; calibrationStep = 0; calibMousePos = null;
+        alert("Quick calibration complete!");
+      }
+      if (calibrationStep < 2) calibrationStep++;
+      updateInstructions();
+      drawAll();
+      saveShots();
+    }
+
+    canvas.addEventListener("mousemove", function(e) {
+      if (!isCalibrating) return;
+      let rect = canvas.getBoundingClientRect();
+      calibMousePos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      drawAll();
+    });
+
+    canvas.addEventListener("click", function(e) {
+      let rect = canvas.getBoundingClientRect();
+      let clickPt = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      if (isCalibrating) {
+        if (calibration.mode === "full") {
+          handleFullCalibrationClick(clickPt);
+        } else if (calibration.mode === "quick") {
+          handleQuickCalibrationClick(clickPt);
+        }
+      } else {
+        if (!currentAim) {
+          alert("Right-click first to set your aim.");
+          return;
+        }
+        let hitPt = { x: clickPt.x, y: clickPt.y };
+        shots.push({ aim: currentAim, hit: hitPt });
+        saveShots();
+        let dx = hitPt.x - currentAim.x;
+        let dy = hitPt.y - currentAim.y;
+        let distCm = Math.hypot(pxToCM(dx), pxToCM(dy));
+        let score = getDartScore(hitPt.x, hitPt.y);
+        shotsLogDiv.innerHTML += `Shot #${shots.length}: Score=${score}, Distance=${distCm.toFixed(2)} cm<br/>`;
+        drawAll();
+      }
+    });
+
+    // --- Right-Click Aiming Mechanism ---
+    canvas.addEventListener("contextmenu", function(e) {
+      e.preventDefault();
+      if (isCalibrating) return;  // Do not set aim during calibration.
+      let rect = canvas.getBoundingClientRect();
+      let x = e.clientX - rect.left;
+      let y = e.clientY - rect.top;
+      let pos = getSnappedPosition(x, y);
+      if (!pos) {
+        alert("Aim must be within the board!");
+        return;
+      }
+      currentAim = pos;
+      drawAll();
+    });
+
+    function getSnappedPosition(px, py) {
+      let dx = px - calibration.center.x;
+      let dy = py - calibration.center.y;
+      let r = Math.hypot(dx, dy);
+      // For bull area, if within outerBull, snap aim to board center.
+      if (r <= calibration.outerBull) {
+        return { x: calibration.center.x, y: calibration.center.y };
+      }
+      let regionCenter = null;
+      if (r <= calibration.tripleIn) {
+        regionCenter = (calibration.outerBull + calibration.tripleIn) / 2;
+      } else if (r <= calibration.tripleOut) {
+        regionCenter = (calibration.tripleIn + calibration.tripleOut) / 2;
+      } else if (r <= calibration.doubleIn) {
+        regionCenter = (calibration.tripleOut + calibration.doubleIn) / 2;
+      } else if (r <= calibration.doubleOut) {
+        regionCenter = (calibration.doubleIn + calibration.doubleOut) / 2;
+      } else if (r <= calibration.outerEdge) {
+        regionCenter = (calibration.doubleOut + calibration.outerEdge) / 2;
+      } else { return null; }
+      let theta = Math.atan2(dy, dx);
+      let normalized = (theta + Math.PI/2 - calibration.rotation + 2*Math.PI) % (2*Math.PI);
+      let sectorIdx = Math.floor(normalized / sectorAngle);
+      let snappedAngle = (sectorIdx + 0.5) * sectorAngle - Math.PI/2 + calibration.rotation;
+      return {
+        x: calibration.center.x + regionCenter * Math.cos(snappedAngle),
+        y: calibration.center.y + regionCenter * Math.sin(snappedAngle)
+      };
+    }
+
+    /*****************************************
+     *            BUTTON HANDLERS
+     *****************************************/
+    document.getElementById("exportData").addEventListener("click", function() {
+      let dataObj = { shots, calibration };
+      if (!calibration.photoDataUrl) {
+        try {
+          let tempCanvas = document.createElement("canvas");
+          tempCanvas.width = boardImage.width;
+          tempCanvas.height = boardImage.height;
+          let tmpCtx = tempCanvas.getContext("2d");
+          tmpCtx.drawImage(boardImage, 0, 0);
+          calibration.photoDataUrl = tempCanvas.toDataURL("image/png");
+        } catch(e) { console.warn("Could not encode board image:", e); }
+      }
+      dataObj.calibration = calibration;
+      let dataStr = JSON.stringify(dataObj);
+      let blob = new Blob([dataStr], { type: "text/plain" });
+      let url = URL.createObjectURL(blob);
+      let a = document.createElement("a");
+      a.href = url;
+      a.download = "dartdata.drts";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+
+    document.getElementById("importData").addEventListener("click", function() {
+      document.getElementById("fileInput").click();
+    });
+    document.getElementById("fileInput").addEventListener("change", function(e) {
+      let file = e.target.files[0];
+      if (!file) return;
+      if (!file.name.endsWith(".drts")) {
+        alert("Please select a .drts file.");
+        return;
+      }
+      let reader = new FileReader();
+      reader.onload = function(event) {
+        try {
+          let imported = JSON.parse(event.target.result);
+          if (!imported.shots || !imported.calibration) {
+            alert("Invalid file format.");
+            return;
+          }
+          shots = imported.shots;
+          calibration = imported.calibration;
+          applyCalibration();
+          saveShots();
+          shotsLogDiv.innerHTML = "";
+          drawAll();
+          alert("Imported shots and calibration!");
+        } catch(err) {
+          alert("Error reading file: " + err);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById("uploadPhoto").addEventListener("click", function() {
+      document.getElementById("photoInput").click();
+    });
+    document.getElementById("photoInput").addEventListener("change", function(e) {
+      let file = e.target.files[0];
+      if (!file) return;
+      let reader = new FileReader();
+      reader.onload = function(evt) {
+        calibration.photoDataUrl = evt.target.result;
+        boardImage.src = evt.target.result;
+        boardImage.onload = drawAll;
+        saveShots();
+      };
+      reader.readAsDataURL(file);
+    });
+
+    document.getElementById("fullCalibration").addEventListener("click", function() {
+      calibration.mode = "full";
+      isCalibrating = true;
+      calibrationStep = 1;
+      calibMousePos = null;
+      alert("Full calibration started (9 steps). Follow on-screen instructions.");
+      updateInstructions();
+      drawAll();
+    });
+
+    document.getElementById("quickCalibration").addEventListener("click", function() {
+      calibration.mode = "quick";
+      isCalibrating = true;
+      calibrationStep = 1;
+      calibMousePos = null;
+      alert("Quick calibration started (2 steps: center and top crossing).");
+      updateInstructions();
+      drawAll();
+    });
+
+    function updateInstructions() {
+      const instr = document.getElementById("calibrationInstructions");
+      if (!isCalibrating) { instr.textContent = ""; return; }
+      let msg = "";
+      if (calibration.mode === "full") {
+        switch (calibrationStep) {
+          case 1: msg = "Full Step 1: Click board center."; break;
+          case 2: msg = "Step 2: Click to set bullseye radius."; break;
+          case 3: msg = "Step 3: Click to set outer bull radius."; break;
+          case 4: msg = "Step 4: Click to set inner treble radius."; break;
+          case 5: msg = "Step 5: Click to set outer treble radius."; break;
+          case 6: msg = "Step 6: Click to set inner double radius."; break;
+          case 7: msg = "Step 7: Click to set outer double radius."; break;
+          case 8: msg = "Step 8: Click to set board's outer edge (0 region)."; break;
+          case 9: msg = "Step 9: Click the crossing of 20 & 1 at the top double ring."; break;
+        }
+      } else if (calibration.mode === "quick") {
+        if (calibrationStep === 1) msg = "Quick Step 1: Click board center.";
+        else if (calibrationStep === 2) msg = "Step 2: Click the crossing of 20 & 1 at the top double ring.";
+      }
+      instr.textContent = msg;
+    }
+
+    /*****************************************
+     *              INIT
+     *****************************************/
+    function init() {
+      loadShots();
+      boardImage.onload = drawAll;
+      drawAll();
+    }
+    init();
+  </script>
+</body>
+</html>
