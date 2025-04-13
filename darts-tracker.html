@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Darts Tracker – Two Calibration Modes with Aiming</title>
-  <!-- Add Font Awesome -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Darts-360 Tracker</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
     body { font-family: Arial, sans-serif; text-align: center; }
     canvas { 
@@ -118,8 +118,6 @@
       bottom: 50px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(0, 0, 0, 0.7);
-      color: white;
       padding: 10px 20px;
       border-radius: 4px;
       font-size: 14px;
@@ -129,6 +127,45 @@
       text-align: center;
       max-width: 80%;
       pointer-events: none; /* Allow clicks to pass through */
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    #notification.success {
+      background-color: rgba(232, 245, 233, 0.85);
+      border-left: 4px solid #4CAF50;
+      color: #333;
+    }
+    
+    #notification.error {
+      background-color: rgba(255, 235, 238, 0.85);
+      border-left: 4px solid #F44336;
+      color: #333;
+    }
+    
+    #notification.info {
+      background-color: rgba(227, 242, 253, 0.85);
+      border-left: 4px solid #2196F3;
+      color: #333;
+    }
+    
+    #notification i {
+      margin-right: 10px;
+      font-size: 16px;
+    }
+    
+    #notification.success i {
+      color: #4CAF50;
+    }
+    
+    #notification.error i {
+      color: #F44336;
+    }
+    
+    #notification.info i {
+      color: #2196F3;
     }
     
     /* Custom confirmation dialog */
@@ -215,7 +252,10 @@
       <i class="fas fa-bullseye"></i>
       <span class="icon-tooltip">Full Calibration</span>
     </button>
-    <div id="notification"></div>
+    <div id="notification">
+      <i class="fas fa-check-circle"></i>
+      <span id="notification-message"></span>
+    </div>
     <div id="confirmDialog">
       <div id="confirmMessage"></div>
       <div class="dialog-buttons">
@@ -329,7 +369,7 @@
         resetFadingDarts(); // Reset animations when clearing shots
         saveShots();
         drawAll();
-        showNotification("Shots cleared successfully");
+        showNotification("Shots cleared successfully", "success");
       });
     });
 
@@ -603,7 +643,7 @@
           let angle = Math.atan2(dy, dx);
           calibration.rotation = angle + Math.PI / 2;
           isCalibrating = false; calibrationStep = 0; calibMousePos = null;
-          showNotification("Full calibration complete", 4000);
+          showNotification("Full calibration complete", "success", 4000);
           break;
       }
       if (calibrationStep < 8) calibrationStep++;
@@ -628,7 +668,7 @@
         let angle = Math.atan2(dy, dx);
         calibration.rotation = angle + Math.PI / 2;
         isCalibrating = false; calibrationStep = 0; calibMousePos = null;
-        showNotification("Quick calibration complete", 4000);
+        showNotification("Quick calibration complete", "success", 4000);
       }
       if (calibrationStep < 2) calibrationStep++;
       updateInstructions();
@@ -654,7 +694,7 @@
         }
       } else {
         if (!currentAim) {
-          showNotification("Right-click first to set your aim");
+          showNotification("Right-click first to set your aim", "error");
           return;
         }
         let hitPt = { x: clickPt.x, y: clickPt.y };
@@ -686,7 +726,7 @@
       let y = e.clientY - rect.top;
       let pos = getSnappedPosition(x, y);
       if (!pos) {
-        showNotification("Aim must be within the board");
+        showNotification("Aim must be within the board", "error");
         return;
       }
       currentAim = pos;
@@ -746,7 +786,7 @@
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      showNotification("Data exported successfully");
+      showNotification("Data exported successfully", "success");
     });
 
     document.getElementById("importDataBtn").addEventListener("click", function() {
@@ -756,7 +796,7 @@
       let file = e.target.files[0];
       if (!file) return;
       if (!file.name.endsWith(".drts")) {
-        showNotification("Please select a .drts file");
+        showNotification("Please select a .drts file", "error");
         return;
       }
       let reader = new FileReader();
@@ -764,7 +804,7 @@
         try {
           let imported = JSON.parse(event.target.result);
           if (!imported.shots || !imported.calibration) {
-            showNotification("Invalid file format");
+            showNotification("Invalid file format", "error");
             return;
           }
           shots = imported.shots;
@@ -773,9 +813,9 @@
           saveShots();
           shotsLogDiv.innerHTML = "";
           drawAll();
-          showNotification("Imported shots and calibration");
+          showNotification("Imported shots and calibration", "success");
         } catch(err) {
-          showNotification("Error reading file: " + err);
+          showNotification("Error reading file: " + err, "error");
         }
       };
       reader.readAsText(file);
@@ -793,7 +833,7 @@
         boardImage.src = evt.target.result;
         boardImage.onload = function() {
           drawAll();
-          showNotification("Board image updated successfully");
+          showNotification("Board image updated successfully", "success");
         };
         saveShots();
       };
@@ -806,7 +846,7 @@
         isCalibrating = true;
         calibrationStep = 1;
         calibMousePos = null;
-        showNotification("Full calibration started - follow on-screen instructions", 5000);
+        showNotification("Full calibration started - follow on-screen instructions", "info", 5000);
         updateInstructions();
         drawAll();
       });
@@ -818,7 +858,7 @@
         isCalibrating = true;
         calibrationStep = 1;
         calibMousePos = null;
-        showNotification("Quick calibration started - follow on-screen instructions", 5000);
+        showNotification("Quick calibration started - follow on-screen instructions", "info", 5000);
         updateInstructions();
         drawAll();
       });
@@ -917,7 +957,7 @@
       resetFadingDarts(); // Reset animations when undoing
       drawAll();
       updateUndoRedoState();
-      showNotification("Last shot undone");
+      showNotification("Last shot undone", "success");
     });
 
     document.getElementById("redoBtn").addEventListener("click", function() {
@@ -928,15 +968,39 @@
       resetFadingDarts(); // Reset animations when redoing
       drawAll();
       updateUndoRedoState();
-      showNotification("Shot redone");
+      showNotification("Shot redone", "success");
     });
 
     /*****************************************
      *            NOTIFICATION SYSTEM
      *****************************************/
-    function showNotification(message, duration = 3000) {
+    /**
+     * Show a notification with specified type
+     * @param {string} message - The message to display
+     * @param {string} type - Either 'success' or 'error'
+     * @param {number} duration - How long to display the notification (ms)
+     */
+    function showNotification(message, type = 'success', duration = 3000) {
       const notification = document.getElementById("notification");
-      notification.textContent = message;
+      const notificationMessage = document.getElementById("notification-message");
+      
+      // Set message
+      notificationMessage.textContent = message;
+      
+      // Set notification type
+      notification.className = type; // Reset classes and set type
+      
+      // Update icon based on type
+      const iconElement = notification.querySelector('i');
+      if (type === 'success') {
+        iconElement.className = 'fas fa-check-circle';
+      } else if (type === 'error') {
+        iconElement.className = 'fas fa-exclamation-circle';
+      } else if (type === 'info') {
+        iconElement.className = 'fas fa-info-circle';
+      }
+      
+      // Show notification
       notification.style.opacity = 1;
       
       // Automatically hide the notification after the specified duration
