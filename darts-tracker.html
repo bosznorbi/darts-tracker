@@ -8,8 +8,7 @@
   <style>
     body { font-family: Arial, sans-serif; text-align: center; }
     canvas { 
-      border: 1px solid #000; 
-      margin-top: 10px; 
+      border: 0px solid #bbb; 
       position: relative;
     }
     button { margin: 5px; padding: 5px 10px; }
@@ -240,7 +239,7 @@
   </style>
 </head>
 <body>
-  <h1>Darts Tracker v0.1.1</h1>
+  <h1>Darts Tracker v0.1.2</h1>
   <div id="canvasContainer">
     <canvas id="dartboard" width="600" height="600"></canvas>
     <button id="importDataBtn" class="icon-button" title="Import Data">
@@ -1447,7 +1446,7 @@
       );
       
       // Add crosshair for precision
-      magnifierCtx.strokeStyle = "rgba(255, 0, 0, 0.7)";
+      magnifierCtx.strokeStyle = "rgba(255, 255, 255, 0.85)";
       magnifierCtx.lineWidth = 1;
       
       // Horizontal line
