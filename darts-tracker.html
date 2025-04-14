@@ -346,13 +346,37 @@
     function loadShots() {
       const stored = localStorage.getItem("dartDataAll");
       if (stored) {
-        let parsed = JSON.parse(stored);
-        if (parsed.shots && Array.isArray(parsed.shots)) { shots = parsed.shots; }
-        if (parsed.calibration) { calibration = parsed.calibration; applyCalibration(); }
+        try {
+          let parsed = JSON.parse(stored);
+          if (parsed.shots && Array.isArray(parsed.shots)) { 
+            shots = parsed.shots; 
+          } else {
+            shots = []; // Ensure shots is initialized as empty array if invalid
+            currentAim = null;
+          }
+          if (parsed.calibration) { 
+            calibration = parsed.calibration; 
+            applyCalibration(); 
+          }
+          if (parsed.currentAim) {
+            currentAim = parsed.currentAim;
+          }
+        } catch (e) {
+          console.error("Error loading shots:", e);
+          shots = [];
+          currentAim = null;
+        }
+      } else {
+        shots = [];
+        currentAim = null;
       }
     }
     function saveShots() {
-      let dataObj = { shots, calibration };
+      let dataObj = { 
+        shots, 
+        calibration,
+        currentAim  // Save the current aim position
+      };
       localStorage.setItem("dartDataAll", JSON.stringify(dataObj));
     }
 
@@ -363,7 +387,7 @@
     document.getElementById("clearDataBtn").addEventListener("click", function() {
       showConfirmDialog("Are you sure you want to clear all shots? Calibration will be retained.", function() {
         shots = [];
-        undoStack = []; // Clear undo stack
+        undoStack = []; // Clear the undo stack when adding a new shot after undoing
         shotsLogDiv.innerHTML = "";
         currentAim = null;
         resetFadingDarts(); // Reset animations when clearing shots
@@ -1109,14 +1133,54 @@
      *              INIT
      *****************************************/
     function init() {
-      loadShots();
-      boardImage.onload = drawAll;
-      
-      // Check for animations on initialization
-      if (shots.length > 0) {
-        checkForFadingDarts();
+      // Load all stored data
+      const stored = localStorage.getItem("dartDataAll");
+      if (stored) {
+        try {
+          let parsed = JSON.parse(stored);
+          
+          // Load shots
+          if (parsed.shots && Array.isArray(parsed.shots)) { 
+            shots = parsed.shots; 
+          } else {
+            shots = []; 
+          }
+          
+          // Load calibration
+          if (parsed.calibration) { 
+            calibration = parsed.calibration; 
+            applyCalibration(); 
+          }
+          
+          // Load aim
+          if (parsed.currentAim) {
+            currentAim = parsed.currentAim;
+          }
+        } catch (e) {
+          console.error("Error loading data:", e);
+          shots = [];
+          currentAim = null;
+        }
+      } else {
+        shots = [];
+        currentAim = null;
       }
       
+      // Reset undo/redo stack and animations
+      undoStack = [];
+      fadingDarts = [];
+      
+      // Update shot logs
+      if (shots && shots.length > 0) {
+        updateShotLog();
+      } else {
+        shotsLogDiv.innerHTML = "";
+      }
+      
+      // Set up board image loading
+      boardImage.onload = drawAll;
+      
+      // Draw the board
       drawAll();
       updateUndoRedoState();
     }
