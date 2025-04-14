@@ -1599,7 +1599,7 @@
     const DEV_MAP_CENTER_X = deviationCanvas.width / 2;
     const DEV_MAP_CENTER_Y = deviationCanvas.height / 2;
     const DEFAULT_MAX_CM = 5; // Default max cm when no shots exist
-    const RECENT_THROW_COLOR = "#3498db"; // Blue for recent throws
+    const RECENT_THROW_COLOR = "#1a78fc"; // Blue for recent throws
     const OLDER_THROW_COLOR = "#95a5a6"; // Gray for older throws
     const CROSSHAIR_COLOR = "#e74c3c"; // Red for the crosshair
     
@@ -1769,7 +1769,7 @@
     }
     
     // Draw a single deviation point on the map
-    function drawDeviationPoint(deviation, isRecent = false) {
+    function drawDeviationPoint(deviation, isRecent = false, color = null) {
       if (!deviation) return;
       
       // Calculate position on the deviation map using the dynamic grid size
@@ -1782,8 +1782,12 @@
         return; // Don't draw points outside the canvas
       }
       
-      // Set color based on recency
-      deviationCtx.fillStyle = isRecent ? RECENT_THROW_COLOR : OLDER_THROW_COLOR;
+      // Set color based on input or recency
+      if (color) {
+        deviationCtx.fillStyle = color;
+      } else {
+        deviationCtx.fillStyle = isRecent ? RECENT_THROW_COLOR : OLDER_THROW_COLOR;
+      }
       
       // Draw the point
       deviationCtx.beginPath();
@@ -1803,11 +1807,39 @@
       
       // Define recency threshold (last 3 darts are considered recent)
       const recentThreshold = Math.max(0, shots.length - 3);
-      
-      // Draw all deviation points
+
+      // Helper to get sector/multiplier from coordinates
+      function getSectorAndMultiplier(pt) {
+        const dx = pt.x - calibration.center.x;
+        const dy = pt.y - calibration.center.y;
+        const r = Math.hypot(dx, dy);
+        if (r <= calibration.bullseye) return { sector: 25, mult: 2 }; // Bullseye (50)
+        if (r <= calibration.outerBull) return { sector: 25, mult: 1 }; // Outer bull (25)
+        let mult = 1;
+        if (r >= calibration.tripleIn && r <= calibration.tripleOut) mult = 3;
+        else if (r >= calibration.doubleIn && r <= calibration.doubleOut) mult = 2;
+        let angle = Math.atan2(dy, dx);
+        let normalized = (angle + Math.PI/2 - calibration.rotation + sectorAngle + 2*Math.PI) % (2*Math.PI);
+        let sectorIndex = Math.floor(normalized / sectorAngle);
+        let baseValue = sectorOrder[sectorIndex];
+        return { sector: baseValue, mult };
+      }
+
+      // Draw all deviation points with color logic
       deviations.forEach((dev, index) => {
         const isRecent = index >= recentThreshold;
-        drawDeviationPoint(dev, isRecent);
+        const shot = shots[index];
+        let color = null;
+        if (shot && shot.aim && shot.hit) {
+          const aimInfo = getSectorAndMultiplier(shot.aim);
+          const hitInfo = getSectorAndMultiplier(shot.hit);
+          if (aimInfo.sector === hitInfo.sector && aimInfo.mult === hitInfo.mult) {
+            color = '#ffd700'; // Gold for perfect hit
+          } else if (aimInfo.sector === hitInfo.sector) {
+            color = '#6fc376'; // Soft green for correct sector
+          }
+        }
+        drawDeviationPoint(dev, isRecent, color);
       });
       
       // Update statistics
