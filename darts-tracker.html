@@ -483,6 +483,27 @@
       // In calibration mode, re-add custom cursor and preview.
       if (isCalibrating && calibMousePos) {
         ctx.save();
+        
+        // For bullseye click (step 1), add horizontal and vertical crosshair lines
+        if ((calibration.mode === "full" && calibrationStep === 1) || 
+            (calibration.mode === "quick" && calibrationStep === 1)) {
+          ctx.setLineDash([5, 5]);
+          ctx.strokeStyle = "white";
+          ctx.lineWidth = 1;
+          
+          // Horizontal line
+          ctx.beginPath();
+          ctx.moveTo(0, calibMousePos.y);
+          ctx.lineTo(canvas.width, calibMousePos.y);
+          ctx.stroke();
+          
+          // Vertical line
+          ctx.beginPath();
+          ctx.moveTo(calibMousePos.x, 0);
+          ctx.lineTo(calibMousePos.x, canvas.height);
+          ctx.stroke();
+        }
+        
         // If in ring calibration steps (for full: steps 2–7, or for quick step 2), draw dashed preview circle.
         if (
           (calibration.mode==="full" && calibrationStep >= 2 && calibrationStep <= 7) ||
@@ -496,11 +517,18 @@
           ctx.lineWidth = 2;
           ctx.stroke();
         }
-        // For final rotation step (full step 8), draw dashed line.
+        
+        // For final rotation step (full step 8 or quick step 2)
         if (
           (calibration.mode==="full" && calibrationStep===8) ||
           (calibration.mode==="quick" && calibrationStep===2)
         ) {
+          const dx = calibMousePos.x - calibration.center.x;
+          const dy = calibMousePos.y - calibration.center.y;
+          const r = Math.hypot(dx, dy);
+          const angle = Math.atan2(dy, dx);
+          
+          // Line from center to cursor
           ctx.setLineDash([5, 5]);
           ctx.beginPath();
           ctx.moveTo(calibration.center.x, calibration.center.y);
@@ -508,7 +536,23 @@
           ctx.strokeStyle = "white";
           ctx.lineWidth = 2;
           ctx.stroke();
+          
+          // Line 18 degrees to the left (to indicate sector 20)
+          const leftAngle = angle - (Math.PI / 10); // 18 degrees = PI/10 radians
+          const leftLineX = calibration.center.x + r * Math.cos(leftAngle);
+          const leftLineY = calibration.center.y + r * Math.sin(leftAngle);
+          
+          ctx.beginPath();
+          ctx.moveTo(calibration.center.x, calibration.center.y);
+          ctx.lineTo(leftLineX, leftLineY);
+          ctx.stroke();
+          
+          // Arc spanning 18 degrees from cursor to the left
+          ctx.beginPath();
+          ctx.arc(calibration.center.x, calibration.center.y, r, angle, leftAngle, true);
+          ctx.stroke();
         }
+        
         // Draw the custom calibration cursor: a white circle with a plus (cross) inside.
         ctx.setLineDash([]);
         ctx.beginPath();
