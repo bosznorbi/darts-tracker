@@ -1576,13 +1576,45 @@
     // Constants for the deviation map
     const DEV_MAP_CENTER_X = deviationCanvas.width / 2;
     const DEV_MAP_CENTER_Y = deviationCanvas.height / 2;
-    const DEV_GRID_SIZE = 20; // Pixels per cm in the deviation map
+    const DEFAULT_MAX_CM = 5; // Default max cm when no shots exist
     const RECENT_THROW_COLOR = "#3498db"; // Blue for recent throws
     const OLDER_THROW_COLOR = "#95a5a6"; // Gray for older throws
     const CROSSHAIR_COLOR = "#e74c3c"; // Red for the crosshair
     
+    // Dynamic grid settings (will be calculated)
+    let maxDisplayCm = DEFAULT_MAX_CM; // Maximum cm to show on the grid (will be updated dynamically)
+    let devGridSize = deviationCanvas.width / (2 * DEFAULT_MAX_CM); // Pixels per cm (will be updated)
+    
+    // Calculate average deviation to determine scale
+    function calculateAverageDeviation() {
+      if (shots.length === 0) return DEFAULT_MAX_CM;
+      
+      // Get deviations for all shots
+      const deviations = shots.map(calculateDeviation).filter(dev => dev !== null);
+      if (deviations.length === 0) return DEFAULT_MAX_CM;
+      
+      // Calculate average deviation
+      const avgDev = deviations.reduce((sum, dev) => sum + dev.total, 0) / deviations.length;
+      
+      // Return twice the average (with a minimum to avoid tiny scale)
+      return Math.max(avgDev * 2, 2); // Minimum 2cm scale
+    }
+    
+    // Update the grid size based on the max display cm
+    function updateGridSize() {
+      // Update the max display cm based on average deviation (2x average)
+      maxDisplayCm = calculateAverageDeviation();
+      
+      // Calculate grid size in pixels per cm
+      // We divide half the canvas width by the max cm to get pixels per cm
+      devGridSize = (deviationCanvas.width / 2) / maxDisplayCm;
+    }
+    
     // Draw the deviation map grid and crosshair
     function drawDeviationMapBase() {
+      // Update grid settings based on shot data
+      updateGridSize();
+      
       // Clear the canvas
       deviationCtx.clearRect(0, 0, deviationCanvas.width, deviationCanvas.height);
       
@@ -1594,31 +1626,43 @@
       deviationCtx.strokeStyle = "#ddd";
       deviationCtx.lineWidth = 1;
       
+      // Calculate grid interval (make sure we don't draw too many lines)
+      let gridInterval = 1; // cm per grid line
+      if (maxDisplayCm > 10) gridInterval = 2;
+      if (maxDisplayCm > 20) gridInterval = 5;
+      if (maxDisplayCm > 50) gridInterval = 10;
+      
       // Vertical grid lines
-      for (let x = DEV_MAP_CENTER_X; x < deviationCanvas.width; x += DEV_GRID_SIZE) {
+      for (let cm = gridInterval; cm <= maxDisplayCm; cm += gridInterval) {
+        // Right of center
+        const xRight = DEV_MAP_CENTER_X + (cm * devGridSize);
         deviationCtx.beginPath();
-        deviationCtx.moveTo(x, 0);
-        deviationCtx.lineTo(x, deviationCanvas.height);
+        deviationCtx.moveTo(xRight, 0);
+        deviationCtx.lineTo(xRight, deviationCanvas.height);
         deviationCtx.stroke();
-      }
-      for (let x = DEV_MAP_CENTER_X; x > 0; x -= DEV_GRID_SIZE) {
+        
+        // Left of center
+        const xLeft = DEV_MAP_CENTER_X - (cm * devGridSize);
         deviationCtx.beginPath();
-        deviationCtx.moveTo(x, 0);
-        deviationCtx.lineTo(x, deviationCanvas.height);
+        deviationCtx.moveTo(xLeft, 0);
+        deviationCtx.lineTo(xLeft, deviationCanvas.height);
         deviationCtx.stroke();
       }
       
       // Horizontal grid lines
-      for (let y = DEV_MAP_CENTER_Y; y < deviationCanvas.height; y += DEV_GRID_SIZE) {
+      for (let cm = gridInterval; cm <= maxDisplayCm; cm += gridInterval) {
+        // Below center
+        const yBelow = DEV_MAP_CENTER_Y + (cm * devGridSize);
         deviationCtx.beginPath();
-        deviationCtx.moveTo(0, y);
-        deviationCtx.lineTo(deviationCanvas.width, y);
+        deviationCtx.moveTo(0, yBelow);
+        deviationCtx.lineTo(deviationCanvas.width, yBelow);
         deviationCtx.stroke();
-      }
-      for (let y = DEV_MAP_CENTER_Y; y > 0; y -= DEV_GRID_SIZE) {
+        
+        // Above center
+        const yAbove = DEV_MAP_CENTER_Y - (cm * devGridSize);
         deviationCtx.beginPath();
-        deviationCtx.moveTo(0, y);
-        deviationCtx.lineTo(deviationCanvas.width, y);
+        deviationCtx.moveTo(0, yAbove);
+        deviationCtx.lineTo(deviationCanvas.width, yAbove);
         deviationCtx.stroke();
       }
       
@@ -1659,22 +1703,27 @@
       deviationCtx.font = "10px Arial";
       deviationCtx.textAlign = "center";
       
-      // X-axis labels (cm)
-      for (let i = 1; i <= 5; i++) {
+      // X-axis labels (cm) - use the same interval as the grid
+      for (let cm = gridInterval; cm <= maxDisplayCm; cm += gridInterval) {
         // Positive direction
-        deviationCtx.fillText(`${i}`, DEV_MAP_CENTER_X + (i * DEV_GRID_SIZE), DEV_MAP_CENTER_Y + 15);
+        deviationCtx.fillText(`${cm}`, DEV_MAP_CENTER_X + (cm * devGridSize), DEV_MAP_CENTER_Y + 15);
         // Negative direction
-        deviationCtx.fillText(`-${i}`, DEV_MAP_CENTER_X - (i * DEV_GRID_SIZE), DEV_MAP_CENTER_Y + 15);
+        deviationCtx.fillText(`-${cm}`, DEV_MAP_CENTER_X - (cm * devGridSize), DEV_MAP_CENTER_Y + 15);
       }
       
       // Y-axis labels (cm)
       deviationCtx.textAlign = "right";
-      for (let i = 1; i <= 5; i++) {
+      for (let cm = gridInterval; cm <= maxDisplayCm; cm += gridInterval) {
         // Positive direction (up is negative on canvas)
-        deviationCtx.fillText(`-${i}`, DEV_MAP_CENTER_X - 5, DEV_MAP_CENTER_Y - (i * DEV_GRID_SIZE) + 3);
+        deviationCtx.fillText(`-${cm}`, DEV_MAP_CENTER_X - 5, DEV_MAP_CENTER_Y - (cm * devGridSize) + 3);
         // Negative direction (down is positive on canvas)
-        deviationCtx.fillText(`${i}`, DEV_MAP_CENTER_X - 5, DEV_MAP_CENTER_Y + (i * DEV_GRID_SIZE) + 3);
+        deviationCtx.fillText(`${cm}`, DEV_MAP_CENTER_X - 5, DEV_MAP_CENTER_Y + (cm * devGridSize) + 3);
       }
+      
+      // Add indication of current scale at the bottom
+      deviationCtx.font = "9px Arial";
+      deviationCtx.textAlign = "center";
+      deviationCtx.fillText(`Scale: ±${maxDisplayCm.toFixed(1)} cm`, DEV_MAP_CENTER_X, deviationCanvas.height - 5);
     }
     
     // Calculate deviation between aim and hit point in cm
@@ -1701,10 +1750,15 @@
     function drawDeviationPoint(deviation, isRecent = false) {
       if (!deviation) return;
       
-      // Calculate position on the deviation map
+      // Calculate position on the deviation map using the dynamic grid size
       // Note: y is inverted because canvas coordinates go down but we want "up" to be positive
-      const x = DEV_MAP_CENTER_X + (deviation.x * DEV_GRID_SIZE);
-      const y = DEV_MAP_CENTER_Y + (deviation.y * DEV_GRID_SIZE);
+      const x = DEV_MAP_CENTER_X + (deviation.x * devGridSize);
+      const y = DEV_MAP_CENTER_Y + (deviation.y * devGridSize);
+      
+      // Check if point is outside the visible area
+      if (x < 0 || x > deviationCanvas.width || y < 0 || y > deviationCanvas.height) {
+        return; // Don't draw points outside the canvas
+      }
       
       // Set color based on recency
       deviationCtx.fillStyle = isRecent ? RECENT_THROW_COLOR : OLDER_THROW_COLOR;
