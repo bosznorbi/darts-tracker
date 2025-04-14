@@ -30,6 +30,66 @@
       margin: 0 auto;
     }
     
+    /* Main flex container for dartboard and stats panel */
+    #dartboardContainer {
+      display: flex;
+      justify-content: center;
+      gap: 20px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    /* Stats panel styling */
+    #statsPanel {
+      width: 250px;
+      height: 600px;
+      box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+      border-radius: 8px;
+      overflow: hidden;
+      background: white;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    #statsHeader {
+      background: #444444;
+      color: white;
+      padding: 10px;
+      font-weight: bold;
+      text-align: center;
+    }
+    
+    #statsContent {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 10px;
+    }
+    
+    #deviationMap {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    
+    #statsSummary {
+      font-size: 13px;
+      text-align: left;
+      padding: 10px;
+      background: #f7f7f7;
+      border-radius: 4px;
+    }
+    
+    .stat-row {
+      margin-bottom: 5px;
+      display: flex;
+      justify-content: space-between;
+    }
+    
+    .stat-label {
+      font-weight: bold;
+    }
+    
     /* Icon button styling */
     .icon-button {
       position: absolute;
@@ -240,53 +300,85 @@
 </head>
 <body>
   <h1>Darts Tracker v0.1.2</h1>
-  <div id="canvasContainer">
-    <canvas id="dartboard" width="600" height="600"></canvas>
-    <button id="importDataBtn" class="icon-button" title="Import Data">
-      <i class="fas fa-file-import"></i>
-      <span class="icon-tooltip">Import Data</span>
-    </button>
-    <button id="exportDataBtn" class="icon-button" title="Export Data">
-      <i class="fas fa-file-export"></i>
-      <span class="icon-tooltip">Export Data</span>
-    </button>
-    <button id="undoBtn" class="icon-button" title="Undo">
-      <i class="fas fa-undo-alt"></i>
-      <span class="icon-tooltip">Undo</span>
-    </button>
-    <button id="redoBtn" class="icon-button" title="Redo">
-      <i class="fas fa-redo-alt"></i>
-      <span class="icon-tooltip">Redo</span>
-    </button>
-    <button id="clearDataBtn" class="icon-button" title="Clear Shots">
-      <i class="fas fa-trash-alt"></i>
-      <span class="icon-tooltip">Clear Shots</span>
-    </button>
-    <button id="uploadPhotoBtn" class="icon-button" title="Upload Photo">
-      <i class="fas fa-image"></i>
-      <span class="icon-tooltip">Upload Board Photo</span>
-    </button>
-    <button id="quickCalibBtn" class="icon-button" title="Quick Calibration">
-      <i class="fas fa-bolt"></i>
-      <span class="icon-tooltip">Quick Calibration</span>
-    </button>
-    <button id="fullCalibBtn" class="icon-button" title="Full Calibration">
-      <i class="fas fa-bullseye"></i>
-      <span class="icon-tooltip">Full Calibration</span>
-    </button>
-    <div id="notification">
-      <i class="fas fa-check-circle"></i>
-      <span id="notification-message"></span>
-    </div>
-    <div id="confirmDialog">
-      <div id="confirmMessage"></div>
-      <div class="dialog-buttons">
-        <button id="confirmOk" class="dialog-button">OK</button>
-        <button id="confirmCancel" class="dialog-button">Cancel</button>
+  <div id="dartboardContainer">
+    <div id="canvasContainer">
+      <canvas id="dartboard" width="600" height="600"></canvas>
+      <button id="importDataBtn" class="icon-button" title="Import Data">
+        <i class="fas fa-file-import"></i>
+        <span class="icon-tooltip">Import Data</span>
+      </button>
+      <button id="exportDataBtn" class="icon-button" title="Export Data">
+        <i class="fas fa-file-export"></i>
+        <span class="icon-tooltip">Export Data</span>
+      </button>
+      <button id="undoBtn" class="icon-button" title="Undo">
+        <i class="fas fa-undo-alt"></i>
+        <span class="icon-tooltip">Undo</span>
+      </button>
+      <button id="redoBtn" class="icon-button" title="Redo">
+        <i class="fas fa-redo-alt"></i>
+        <span class="icon-tooltip">Redo</span>
+      </button>
+      <button id="clearDataBtn" class="icon-button" title="Clear Shots">
+        <i class="fas fa-trash-alt"></i>
+        <span class="icon-tooltip">Clear Shots</span>
+      </button>
+      <button id="uploadPhotoBtn" class="icon-button" title="Upload Photo">
+        <i class="fas fa-image"></i>
+        <span class="icon-tooltip">Upload Board Photo</span>
+      </button>
+      <button id="quickCalibBtn" class="icon-button" title="Quick Calibration">
+        <i class="fas fa-bolt"></i>
+        <span class="icon-tooltip">Quick Calibration</span>
+      </button>
+      <button id="fullCalibBtn" class="icon-button" title="Full Calibration">
+        <i class="fas fa-bullseye"></i>
+        <span class="icon-tooltip">Full Calibration</span>
+      </button>
+      <div id="notification">
+        <i class="fas fa-check-circle"></i>
+        <span id="notification-message"></span>
+      </div>
+      <div id="confirmDialog">
+        <div id="confirmMessage"></div>
+        <div class="dialog-buttons">
+          <button id="confirmOk" class="dialog-button">OK</button>
+          <button id="confirmCancel" class="dialog-button">Cancel</button>
+        </div>
+      </div>
+      <div id="magnifier">
+        <canvas id="magnifierCanvas" width="120" height="120"></canvas>
       </div>
     </div>
-    <div id="magnifier">
-      <canvas id="magnifierCanvas" width="120" height="120"></canvas>
+    
+    <!-- New Statistics Panel -->
+    <div id="statsPanel">
+      <div id="statsHeader">Throw Accuracy Statistics</div>
+      <div id="statsContent">
+        <canvas id="deviationMap" width="230" height="230"></canvas>
+        <div id="statsSummary">
+          <div class="stat-row">
+            <span class="stat-label">Average Deviation:</span>
+            <span id="avgDeviation">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Maximum Deviation:</span>
+            <span id="maxDeviation">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Horizontal Tendency:</span>
+            <span id="horizontalTendency">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Vertical Tendency:</span>
+            <span id="verticalTendency">-</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-label">Total Throws Analyzed:</span>
+            <span id="totalThrows">0</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <div id="calibrationInstructions"></div>
@@ -1473,6 +1565,256 @@
       const magnifier = document.getElementById("magnifier");
       magnifier.style.display = "none";
     });
+    
+    /*****************************************
+     *       ACCURACY STATISTICS FUNCTIONS
+     *****************************************/
+    // Get deviation map canvas and context
+    const deviationCanvas = document.getElementById("deviationMap");
+    const deviationCtx = deviationCanvas.getContext("2d");
+    
+    // Constants for the deviation map
+    const DEV_MAP_CENTER_X = deviationCanvas.width / 2;
+    const DEV_MAP_CENTER_Y = deviationCanvas.height / 2;
+    const DEV_GRID_SIZE = 20; // Pixels per cm in the deviation map
+    const RECENT_THROW_COLOR = "#3498db"; // Blue for recent throws
+    const OLDER_THROW_COLOR = "#95a5a6"; // Gray for older throws
+    const CROSSHAIR_COLOR = "#e74c3c"; // Red for the crosshair
+    
+    // Draw the deviation map grid and crosshair
+    function drawDeviationMapBase() {
+      // Clear the canvas
+      deviationCtx.clearRect(0, 0, deviationCanvas.width, deviationCanvas.height);
+      
+      // Set background color
+      deviationCtx.fillStyle = "#f8f9fa";
+      deviationCtx.fillRect(0, 0, deviationCanvas.width, deviationCanvas.height);
+      
+      // Draw grid
+      deviationCtx.strokeStyle = "#ddd";
+      deviationCtx.lineWidth = 1;
+      
+      // Vertical grid lines
+      for (let x = DEV_MAP_CENTER_X; x < deviationCanvas.width; x += DEV_GRID_SIZE) {
+        deviationCtx.beginPath();
+        deviationCtx.moveTo(x, 0);
+        deviationCtx.lineTo(x, deviationCanvas.height);
+        deviationCtx.stroke();
+      }
+      for (let x = DEV_MAP_CENTER_X; x > 0; x -= DEV_GRID_SIZE) {
+        deviationCtx.beginPath();
+        deviationCtx.moveTo(x, 0);
+        deviationCtx.lineTo(x, deviationCanvas.height);
+        deviationCtx.stroke();
+      }
+      
+      // Horizontal grid lines
+      for (let y = DEV_MAP_CENTER_Y; y < deviationCanvas.height; y += DEV_GRID_SIZE) {
+        deviationCtx.beginPath();
+        deviationCtx.moveTo(0, y);
+        deviationCtx.lineTo(deviationCanvas.width, y);
+        deviationCtx.stroke();
+      }
+      for (let y = DEV_MAP_CENTER_Y; y > 0; y -= DEV_GRID_SIZE) {
+        deviationCtx.beginPath();
+        deviationCtx.moveTo(0, y);
+        deviationCtx.lineTo(deviationCanvas.width, y);
+        deviationCtx.stroke();
+      }
+      
+      // Draw axes with slightly darker lines
+      deviationCtx.strokeStyle = "#aaa";
+      deviationCtx.lineWidth = 1.5;
+      
+      // Horizontal axis
+      deviationCtx.beginPath();
+      deviationCtx.moveTo(0, DEV_MAP_CENTER_Y);
+      deviationCtx.lineTo(deviationCanvas.width, DEV_MAP_CENTER_Y);
+      deviationCtx.stroke();
+      
+      // Vertical axis
+      deviationCtx.beginPath();
+      deviationCtx.moveTo(DEV_MAP_CENTER_X, 0);
+      deviationCtx.lineTo(DEV_MAP_CENTER_X, deviationCanvas.height);
+      deviationCtx.stroke();
+      
+      // Draw the center crosshair
+      deviationCtx.strokeStyle = CROSSHAIR_COLOR;
+      deviationCtx.lineWidth = 2;
+      
+      // Horizontal line of crosshair
+      deviationCtx.beginPath();
+      deviationCtx.moveTo(DEV_MAP_CENTER_X - 10, DEV_MAP_CENTER_Y);
+      deviationCtx.lineTo(DEV_MAP_CENTER_X + 10, DEV_MAP_CENTER_Y);
+      deviationCtx.stroke();
+      
+      // Vertical line of crosshair
+      deviationCtx.beginPath();
+      deviationCtx.moveTo(DEV_MAP_CENTER_X, DEV_MAP_CENTER_Y - 10);
+      deviationCtx.lineTo(DEV_MAP_CENTER_X, DEV_MAP_CENTER_Y + 10);
+      deviationCtx.stroke();
+      
+      // Label the axes with cm indicators
+      deviationCtx.fillStyle = "#555";
+      deviationCtx.font = "10px Arial";
+      deviationCtx.textAlign = "center";
+      
+      // X-axis labels (cm)
+      for (let i = 1; i <= 5; i++) {
+        // Positive direction
+        deviationCtx.fillText(`${i}`, DEV_MAP_CENTER_X + (i * DEV_GRID_SIZE), DEV_MAP_CENTER_Y + 15);
+        // Negative direction
+        deviationCtx.fillText(`-${i}`, DEV_MAP_CENTER_X - (i * DEV_GRID_SIZE), DEV_MAP_CENTER_Y + 15);
+      }
+      
+      // Y-axis labels (cm)
+      deviationCtx.textAlign = "right";
+      for (let i = 1; i <= 5; i++) {
+        // Positive direction (up is negative on canvas)
+        deviationCtx.fillText(`-${i}`, DEV_MAP_CENTER_X - 5, DEV_MAP_CENTER_Y - (i * DEV_GRID_SIZE) + 3);
+        // Negative direction (down is positive on canvas)
+        deviationCtx.fillText(`${i}`, DEV_MAP_CENTER_X - 5, DEV_MAP_CENTER_Y + (i * DEV_GRID_SIZE) + 3);
+      }
+    }
+    
+    // Calculate deviation between aim and hit point in cm
+    function calculateDeviation(shot) {
+      if (!shot.aim || !shot.hit) return null;
+      
+      // Calculate deviation in pixels
+      const dx = shot.hit.x - shot.aim.x;
+      const dy = shot.hit.y - shot.aim.y;
+      
+      // Convert to cm using the existing utility function
+      const dxCm = pxToCM(Math.abs(dx));
+      const dyCm = pxToCM(Math.abs(dy));
+      
+      // Return the deviation with sign (important for direction tendencies)
+      return {
+        x: dx > 0 ? dxCm : -dxCm, // Positive = right, negative = left
+        y: dy > 0 ? dyCm : -dyCm, // Positive = down, negative = up (in board coordinates)
+        total: pxToCM(Math.hypot(dx, dy)) // Total deviation distance
+      };
+    }
+    
+    // Draw a single deviation point on the map
+    function drawDeviationPoint(deviation, isRecent = false) {
+      if (!deviation) return;
+      
+      // Calculate position on the deviation map
+      // Note: y is inverted because canvas coordinates go down but we want "up" to be positive
+      const x = DEV_MAP_CENTER_X + (deviation.x * DEV_GRID_SIZE);
+      const y = DEV_MAP_CENTER_Y + (deviation.y * DEV_GRID_SIZE);
+      
+      // Set color based on recency
+      deviationCtx.fillStyle = isRecent ? RECENT_THROW_COLOR : OLDER_THROW_COLOR;
+      
+      // Draw the point
+      deviationCtx.beginPath();
+      deviationCtx.arc(x, y, 4, 0, 2 * Math.PI);
+      deviationCtx.fill();
+    }
+    
+    // Update the deviation map with all throws
+    function updateDeviationMap() {
+      // Draw the base map (grid and crosshair)
+      drawDeviationMapBase();
+      
+      if (shots.length === 0) return;
+      
+      // Get deviations for all shots
+      const deviations = shots.map(calculateDeviation).filter(dev => dev !== null);
+      
+      // Define recency threshold (last 3 darts are considered recent)
+      const recentThreshold = Math.max(0, shots.length - 3);
+      
+      // Draw all deviation points
+      deviations.forEach((dev, index) => {
+        const isRecent = index >= recentThreshold;
+        drawDeviationPoint(dev, isRecent);
+      });
+      
+      // Update statistics
+      updateDeviationStats(deviations);
+    }
+    
+    // Calculate and display statistics
+    function updateDeviationStats(deviations) {
+      if (!deviations || deviations.length === 0) {
+        document.getElementById('avgDeviation').textContent = '-';
+        document.getElementById('maxDeviation').textContent = '-';
+        document.getElementById('horizontalTendency').textContent = '-';
+        document.getElementById('verticalTendency').textContent = '-';
+        document.getElementById('totalThrows').textContent = '0';
+        return;
+      }
+      
+      // Total number of throws
+      document.getElementById('totalThrows').textContent = deviations.length.toString();
+      
+      // Calculate average deviation (total distance)
+      const avgDev = deviations.reduce((sum, dev) => sum + dev.total, 0) / deviations.length;
+      document.getElementById('avgDeviation').textContent = `${avgDev.toFixed(1)} cm`;
+      
+      // Calculate maximum deviation
+      const maxDev = Math.max(...deviations.map(dev => dev.total));
+      document.getElementById('maxDeviation').textContent = `${maxDev.toFixed(1)} cm`;
+      
+      // Calculate horizontal tendency (average x deviation)
+      const avgX = deviations.reduce((sum, dev) => sum + dev.x, 0) / deviations.length;
+      const horizTrend = avgX.toFixed(1);
+      const horizDir = avgX > 0 ? 'right' : avgX < 0 ? 'left' : 'center';
+      document.getElementById('horizontalTendency').textContent = 
+        avgX === 0 ? 'Centered' : `${Math.abs(horizTrend)} cm ${horizDir}`;
+      
+      // Calculate vertical tendency (average y deviation)
+      const avgY = deviations.reduce((sum, dev) => sum + dev.y, 0) / deviations.length;
+      const vertTrend = avgY.toFixed(1);
+      const vertDir = avgY > 0 ? 'low' : avgY < 0 ? 'high' : 'center';
+      document.getElementById('verticalTendency').textContent = 
+        avgY === 0 ? 'Centered' : `${Math.abs(vertTrend)} cm ${vertDir}`;
+    }
+    
+    // Function to integrate with existing code
+    function updateAllStats() {
+      updateDeviationMap();
+    }
+    
+    // Initialize the deviation map on page load
+    function initDeviationMap() {
+      drawDeviationMapBase();
+      if (shots.length > 0) {
+        updateDeviationMap();
+      }
+    }
+    
+    // --- Modified functions to integrate with the new feature ---
+    
+    // Modify the existing drawAll function to also update stats
+    const originalDrawAll = drawAll;
+    drawAll = function() {
+      originalDrawAll();
+      updateAllStats();
+    };
+    
+    // Modify clear shots button handler to also clear stats
+    const originalClearBtn = document.getElementById("clearDataBtn").onclick;
+    document.getElementById("clearDataBtn").onclick = function(e) {
+      // The original function uses a confirm dialog so we leave it as is
+      // It will eventually call drawAll which will update our stats
+    };
+    
+    // Initialize the deviation map when everything else is initialized
+    const originalInit = init;
+    init = function() {
+      originalInit();
+      initDeviationMap();
+    };
+    
+    // Add init for deviations map to load event
+    window.addEventListener('load', initDeviationMap);
+    
+    init();
   </script>
 </body>
 </html>
