@@ -504,10 +504,9 @@
           ctx.stroke();
         }
         
-        // If in ring calibration steps (for full: steps 2–7, or for quick step 2), draw dashed preview circle.
+        // If in ring calibration steps (for full: steps 2–7), draw dashed preview circle.
         if (
-          (calibration.mode==="full" && calibrationStep >= 2 && calibrationStep <= 7) ||
-          (calibration.mode==="quick" && calibrationStep===2)
+          (calibration.mode==="full" && calibrationStep >= 2 && calibrationStep <= 7)
         ) {
           ctx.setLineDash([5, 5]);
           let rPrev = Math.hypot(calibMousePos.x - calibration.center.x, calibMousePos.y - calibration.center.y);
@@ -680,18 +679,18 @@
       let msg = "";
       if (calibration.mode === "full") {
         switch (calibrationStep) {
-          case 1: msg = "Step 1/8: Click board center."; break;
-          case 2: msg = "Step 2/8: Click to set bullseye radius."; break;
-          case 3: msg = "Step 3/8: Click to set outer bull radius."; break;
-          case 4: msg = "Step 4/8: Click to set inner treble radius."; break;
-          case 5: msg = "Step 5/8: Click to set outer treble radius."; break;
-          case 6: msg = "Step 6/8: Click to set inner double radius."; break;
-          case 7: msg = "Step 7/8: Click to set outer double radius."; break;
-          case 8: msg = "Step 8/8: Click the crossing of 20 & 1 at the top double ring."; break;
+          case 1: msg = "Step 1/8: Select the middle of the board"; break;
+          case 2: msg = "Step 2/8: Select bullseye ring"; break;
+          case 3: msg = "Step 3/8: Select outer bull ring"; break;
+          case 4: msg = "Step 4/8: Select inner treble ring"; break;
+          case 5: msg = "Step 5/8: Select outer treble ring"; break;
+          case 6: msg = "Step 6/8: Select inner double ring"; break;
+          case 7: msg = "Step 7/8: Select outer double ring"; break;
+          case 8: msg = "Step 8/8: Select sector 20"; break;
         }
       } else if (calibration.mode === "quick") {
-        if (calibrationStep === 1) msg = "Step 1/2: Click board center.";
-        else if (calibrationStep === 2) msg = "Step 2/2: Click the crossing of 20 & 1 at the top double ring.";
+        if (calibrationStep === 1) msg = "Step 1/2: Select the middle of the board";
+        else if (calibrationStep === 2) msg = "Step 2/2: Select sector 20";
       }
       
       // Show the message as a persistent notification
