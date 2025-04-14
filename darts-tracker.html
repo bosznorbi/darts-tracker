@@ -444,7 +444,7 @@
     let currentAim = null;
 
     /*****************************************
-     *       BOARD IMAGE & LOG
+     *        BOARD IMAGE & LOG
      *****************************************/
     const boardImage = new Image();
     boardImage.src = "board.png";
@@ -935,6 +935,12 @@
         // Draw everything
         drawAll();
         updateUndoRedoState();
+        
+        // Reset magnifier to offset position after click
+        isMouseDown = false;
+        let x = e.clientX - rect.left;
+        let y = e.clientY - rect.top;
+        updateMagnifier(x, y, false);
       }
     });
 
@@ -1495,7 +1501,7 @@
     }
 
     // Magnifier functionality
-    function updateMagnifier(mouseX, mouseY) {
+    function updateMagnifier(mouseX, mouseY, isMouseDown = false) {
       const magnifier = document.getElementById("magnifier");
       const magnifierCanvas = document.getElementById("magnifierCanvas");
       const magnifierCtx = magnifierCanvas.getContext("2d");
@@ -1503,18 +1509,27 @@
       // Set magnification level
       const zoomFactor = 2;
       
-      // Position the magnifier next to the cursor with offset
-      const offsetX = 20;
-      const offsetY = 20;
-      let magX = mouseX + offsetX;
-      let magY = mouseY + offsetY;
+      // Position the magnifier depending on mouse state
+      let magX, magY;
       
-      // Keep magnifier within canvas boundaries
-      if (magX + magnifier.offsetWidth > canvas.width) {
-        magX = mouseX - offsetX - magnifier.offsetWidth;
-      }
-      if (magY + magnifier.offsetHeight > canvas.height) {
-        magY = mouseY - offsetY - magnifier.offsetHeight;
+      if (isMouseDown) {
+        // When mouse is down, position directly at cursor (centered)
+        magX = mouseX - magnifier.offsetWidth / 2;
+        magY = mouseY - magnifier.offsetHeight / 2;
+      } else {
+        // When mouse is up, use original offset positioning
+        const offsetX = 20;
+        const offsetY = 20;
+        magX = mouseX + offsetX;
+        magY = mouseY + offsetY;
+        
+        // Keep magnifier within canvas boundaries
+        if (magX + magnifier.offsetWidth > canvas.width) {
+          magX = mouseX - offsetX - magnifier.offsetWidth;
+        }
+        if (magY + magnifier.offsetHeight > canvas.height) {
+          magY = mouseY - offsetY - magnifier.offsetHeight;
+        }
       }
       
       // Update magnifier position
@@ -1554,11 +1569,18 @@
       magnifierCtx.stroke();
     }
 
+    let isMouseDown = false;
+    canvas.addEventListener("mousedown", function(e) {
+      isMouseDown = true;
+    });
+    canvas.addEventListener("mouseup", function(e) {
+      isMouseDown = false;
+    });
     canvas.addEventListener("mousemove", function(e) {
       let rect = canvas.getBoundingClientRect();
       let x = e.clientX - rect.left;
       let y = e.clientY - rect.top;
-      updateMagnifier(x, y);
+      updateMagnifier(x, y, isMouseDown);
     });
 
     canvas.addEventListener("mouseout", function() {
