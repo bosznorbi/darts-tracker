@@ -1833,10 +1833,12 @@
         if (shot && shot.aim && shot.hit) {
           const aimInfo = getSectorAndMultiplier(shot.aim);
           const hitInfo = getSectorAndMultiplier(shot.hit);
-          if (aimInfo.sector === hitInfo.sector && aimInfo.mult === hitInfo.mult) {
-            color = '#ffd700'; // Gold for perfect hit
-          } else if (aimInfo.sector === hitInfo.sector) {
-            color = '#6fc376'; // Soft green for correct sector
+          if (aimInfo.sector === hitInfo.sector) {
+            if (aimInfo.mult !== 1 && aimInfo.mult === hitInfo.mult) {
+              color = '#ffd700'; // Gold for perfect hit (non-single aim)
+            } else {
+              color = '#6fc376'; // Green for correct sector (including perfect single)
+            }
           }
         }
         drawDeviationPoint(dev, isRecent, color);
