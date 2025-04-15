@@ -533,11 +533,12 @@
     /*****************************************
      *         UTILITY FUNCTIONS
      *****************************************/
-    // Convert pixels to centimeters based on the calibrated double ring.
+    // Convert pixels to centimeters based on the full board diameter (451mm).
     function pxToCM(pxDist) {
-      let boardDiameterPX = calibration.doubleOut * 2;
-      let mmPerPx = realBoardDiameterMM / boardDiameterPX;
-      return (pxDist * mmPerPx) / 10;
+      // Calculate the full board diameter in pixels based on calibration of double ring
+      let fullBoardPx = calibration.doubleOut * 2 * (realBoardDiameterMM / OFFICIAL_MM.doubleOut);
+      let mmPerPx = realBoardDiameterMM / fullBoardPx;
+      return 2 * (pxDist * mmPerPx) / 10;
     }
 
     /*****************************************
