@@ -509,6 +509,7 @@
         currentAim = null;
         resetFadingDarts(); // Reset animations when clearing shots
         saveShots();
+        resetStatsDisplay(); // Reset stats fields visually
         drawAll();
         showNotification("Shots cleared successfully", "success");
       });
@@ -1856,6 +1857,9 @@
         document.getElementById('horizontalTendency').textContent = '-';
         document.getElementById('verticalTendency').textContent = '-';
         document.getElementById('totalThrows').textContent = '0';
+        // If extra stats are present, reset them as well
+        if (document.getElementById('perfectHits')) document.getElementById('perfectHits').textContent = '0';
+        if (document.getElementById('sectorHits')) document.getElementById('sectorHits').textContent = '0';
         return;
       }
       
@@ -1923,6 +1927,17 @@
     
     // Add init for deviations map to load event
     window.addEventListener('load', initDeviationMap);
+    
+    // Helper to reset stats display (for clear button)
+    function resetStatsDisplay() {
+      document.getElementById('avgDeviation').textContent = '-';
+      document.getElementById('maxDeviation').textContent = '-';
+      document.getElementById('horizontalTendency').textContent = '-';
+      document.getElementById('verticalTendency').textContent = '-';
+      document.getElementById('totalThrows').textContent = '0';
+      if (document.getElementById('perfectHits')) document.getElementById('perfectHits').textContent = '0';
+      if (document.getElementById('sectorHits')) document.getElementById('sectorHits').textContent = '0';
+    }
     
     init();
   </script>
